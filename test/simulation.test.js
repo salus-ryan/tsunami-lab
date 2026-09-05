@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   GRID_WIDTH, GRID_HEIGHT, LAND, TsunamiSimulation, decodeBathymetry,
-  deriveEarthquake, defaultRakeForMechanism, magnitudeToMoment, formatSimTime, wrapLongitude,
+  deriveEarthquake, buildEnsembleEvents, defaultRakeForMechanism, magnitudeToMoment, formatSimTime, wrapLongitude,
 } from '../public/simulation.js';
 
 const EVENT = {
@@ -36,6 +36,24 @@ test('depth, mechanism, and rake alter vertical coupling', () => {
   assert.ok(shallow.verticalDisplacementM > strikeSlip.verticalDisplacementM);
   assert.equal(defaultRakeForMechanism('normal'), -90);
   assert.equal(defaultRakeForMechanism('strike-slip'), 0);
+});
+
+test('uncertainty ensembles are deterministic, bounded, and preserve the central event', () => {
+  const first = buildEnsembleEvents(EVENT, 5);
+  const second = buildEnsembleEvents(EVENT, 5);
+  assert.deepEqual(first, second);
+  assert.equal(first.length, 5);
+  assert.deepEqual(first[0], EVENT);
+  assert.ok(first.some(member => member.magnitude < EVENT.magnitude));
+  assert.ok(first.some(member => member.magnitude > EVENT.magnitude));
+  for (const member of first) {
+    assert.ok(member.magnitude >= 6 && member.magnitude <= 9.5);
+    assert.ok(member.focalDepthKm >= 5 && member.focalDepthKm <= 100);
+    assert.ok(member.dipDeg >= 5 && member.dipDeg <= 80);
+    assert.ok(member.rakeDeg >= -180 && member.rakeDeg <= 180);
+  }
+  assert.equal(buildEnsembleEvents(EVENT, 1).length, 1);
+  assert.equal(buildEnsembleEvents(EVENT, 999).length, 3);
 });
 
 test('bathymetry asset has one-degree global dimensions and both land and ocean', async () => {
