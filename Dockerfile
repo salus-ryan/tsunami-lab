@@ -1,4 +1,4 @@
-FROM nginxinc/nginx-unprivileged:1.27.4-alpine
+FROM nginxinc/nginx-unprivileged:1.31.5-alpine
 
 LABEL org.opencontainers.image.title="Tsunami Lab" \
       org.opencontainers.image.description="Offline-first educational tsunami simulator" \
