@@ -89,6 +89,17 @@
             <option value="strike-slip">Strike-slip</option>
           </select>
         </label>
+        <div class="slider-row">
+          <div class="slider-heading"><label for="tide">Tidal stage</label><output id="tideOutput">+0.0 m</output></div>
+          <input id="tide" type="range" min="-3" max="3" value="0" step="0.5">
+        </div>
+        <label class="select-control">Uncertainty ensemble
+          <select id="ensemble">
+            <option value="1">1 member (fast)</option>
+            <option value="3" selected>3 members</option>
+            <option value="5">5 members</option>
+          </select>
+        </label>
       </div>
 
       <div id="sourceMetrics" class="source-metrics">
@@ -102,7 +113,7 @@
     <section class="impact-card">
       <div class="section-title">
         <div><span>COASTAL WATCH</span><h2>Estimated maximum coastal wave</h2></div>
-        <div class="uncertainty">± large uncertainty</div>
+        <div class="impact-badges"><div id="tideBadge" class="tide-badge">Tide +0.0 m</div><div class="uncertainty">ensemble range</div></div>
       </div>
       <div id="watchList" class="watch-list"><div class="empty-state">Run a scenario to populate coastal estimates.</div></div>
       <div class="hazard-key"><span><i class="low"></i>&lt;0.3 m</span><span><i class="advisory"></i>0.3–1 m</span><span><i class="warning"></i>1–3 m</span><span><i class="severe"></i>&gt;3 m</span></div>
@@ -116,9 +127,9 @@
       <button class="dialog-close" aria-label="Close">×</button>
       <div class="dialog-wave">≋</div>
       <h2>About Tsunami Lab</h2>
-      <p>This sandbox advances mass and momentum on a staggered, depth-varying shallow-water grid. A progressive multi-patch finite fault uses earthquake moment, rupture area, heterogeneous slip, rake, strike, dip, and focal-depth coupling to generate the wave.</p>
+      <p>This sandbox advances mass and momentum on a staggered, depth-varying shallow-water grid. A progressive multi-patch finite fault uses earthquake moment, rupture area, heterogeneous slip, rake, strike, dip, and focal-depth coupling. Deterministic source ensembles expose sensitivity to uncertain fault parameters.</p>
       <h3>What is modeled</h3>
-      <ul><li>One-degree global terrain-derived ocean depths</li><li>Mass-conserving face transports and adaptive CFL time steps</li><li>Progressive rupture at an approximate 2.6 km/s</li><li>Depth-dependent wave speed, bottom friction, and Coriolis rotation</li></ul>
+      <ul><li>One-degree global terrain-derived ocean depths adjusted for tidal stage</li><li>Mass-conserving face transports and adaptive CFL time steps</li><li>Progressive rupture at an approximate 2.6 km/s</li><li>Depth-dependent wave speed, bottom friction, Coriolis rotation, and source uncertainty ranges</li></ul>
       <h3>Important limitations</h3>
       <ul><li>One-degree cells cannot resolve bays, harbors, or local inundation</li><li>The finite fault is empirical—not an Okada elastic-dislocation solution</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Tides, dispersion, nonlinear run-up, and wetting/drying are omitted</li></ul>
       <p class="source-note">Terrain source: Mapzen Terrarium global elevation tiles (NASA SRTM and ocean bathymetry sources). Coastline: Natural Earth. Neither dataset implies endorsement.</p>

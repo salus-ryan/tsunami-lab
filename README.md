@@ -40,7 +40,7 @@ PLAYWRIGHT_BASE_URL=https://salus-ryan.github.io/tsunami-lab/ npm run test:e2e
 ## Gameplay
 
 1. Tap ocean water or choose a historical-event-inspired preset.
-2. Set moment magnitude, focal depth, strike, dip, rake, and fault mechanism.
+2. Set moment magnitude, focal depth, strike, dip, rake, fault mechanism, tidal stage, and ensemble size.
 3. Trigger the earthquake and watch crest/trough propagation.
 4. Change simulation speed, pause, or reset.
 5. Review maximum coastal-wave proxies and first-signal times at watch points.
@@ -66,7 +66,9 @@ M₀ = 10^(1.5 Mw + 9.1)
 
 An empirical magnitude-to-rupture-area relation estimates fault dimensions. Mean slip is derived from seismic moment and nominal crustal rigidity. Dip, rake, mechanism, and focal depth control vertical coupling. The rupture is divided into tapered, heterogeneous subfault patches that activate progressively at approximately 2.6 km/s rather than displacing the entire source instantaneously.
 
-Coastal watch values apply a capped Green's-law-inspired shoaling factor to the nearest coarse offshore cell. They are hazard indicators—not predictions of local run-up, inundation, damage, or casualties.
+Optional 3- and 5-member deterministic ensembles perturb magnitude, depth, strike, dip, and rake within bounded source-uncertainty ranges. Every member runs through the full propagation solver; coastal cards report the central result and the resulting range. Tidal stage adjusts wet-cell depth before propagation.
+
+Coastal watch values apply a capped Green's-law-inspired shoaling factor to the nearest coarse offshore cell. Ensemble ranges represent source sensitivity only and are not statistical confidence intervals. They are hazard indicators—not predictions of local run-up, inundation, damage, or casualties.
 
 ## Data
 

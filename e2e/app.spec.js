@@ -63,6 +63,26 @@ test('builds a multi-patch source and responds physically to rake', async ({ pag
   expect(strikeParallelWave).toBeLessThan(thrustWave);
 });
 
+test('applies tidal stage and reports a three-member uncertainty range', async ({ page }) => {
+  await page.locator('#tide').fill('1.5');
+  await expect(page.locator('#tideOutput')).toHaveText('+1.5 m');
+  await expect(page.locator('#tideBadge')).toHaveText('Tide +1.5 m');
+  await choosePreset(page, 'tohoku');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-ensemble-count', '3');
+  await expect(page.locator('.watch-item')).toHaveCount(10);
+  await expect(page.locator('.ensemble-range')).toHaveCount(10);
+});
+
+test('single-member mode suppresses ensemble ranges', async ({ page }) => {
+  await page.locator('#ensemble').selectOption('1');
+  await choosePreset(page, 'aleutian');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-ensemble-count', '1');
+  await expect(page.locator('.watch-item')).toHaveCount(10);
+  await expect(page.locator('.ensemble-range')).toHaveCount(0);
+});
+
 test('runs, pauses, resumes, and resets a tsunami simulation', async ({ page }) => {
   await choosePreset(page, 'tohoku');
   await page.getByRole('button', { name: 'Trigger quake' }).click();
@@ -137,8 +157,10 @@ test('high-speed worker simulation keeps controls responsive', async ({ page }) 
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await choosePreset(page, 'chile');
+  await page.locator('#ensemble').selectOption('5');
   await page.locator('#speedSelect').selectOption('12');
   await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-ensemble-count', '5');
   await expect.poll(() => page.locator('#simTime').textContent()).not.toBe('00:00');
   await page.getByRole('button', { name: 'About the model' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();

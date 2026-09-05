@@ -48,6 +48,50 @@ export function deriveEarthquake({ magnitude, focalDepthKm, dipDeg, mechanism = 
   };
 }
 
+export function buildEnsembleEvents(event, memberCount = 3) {
+  const count = [1, 3, 5].includes(Number(memberCount)) ? Number(memberCount) : 3;
+  const base = {
+    ...event,
+    rakeDeg: Number.isFinite(event.rakeDeg) ? event.rakeDeg : defaultRakeForMechanism(event.mechanism),
+  };
+  const variants = [
+    base,
+    {
+      ...base,
+      magnitude: clamp(base.magnitude - 0.12, 6, 9.5),
+      focalDepthKm: clamp(base.focalDepthKm * 1.18, 5, 100),
+      strikeDeg: (base.strikeDeg + 353) % 360,
+      dipDeg: clamp(base.dipDeg - 4, 5, 80),
+      rakeDeg: clamp(base.rakeDeg - 8, -180, 180),
+    },
+    {
+      ...base,
+      magnitude: clamp(base.magnitude + 0.12, 6, 9.5),
+      focalDepthKm: clamp(base.focalDepthKm * 0.84, 5, 100),
+      strikeDeg: (base.strikeDeg + 8) % 360,
+      dipDeg: clamp(base.dipDeg + 4, 5, 80),
+      rakeDeg: clamp(base.rakeDeg + 8, -180, 180),
+    },
+    {
+      ...base,
+      magnitude: clamp(base.magnitude - 0.06, 6, 9.5),
+      focalDepthKm: clamp(base.focalDepthKm * 0.92, 5, 100),
+      strikeDeg: (base.strikeDeg + 345) % 360,
+      dipDeg: clamp(base.dipDeg + 7, 5, 80),
+      rakeDeg: clamp(base.rakeDeg + 14, -180, 180),
+    },
+    {
+      ...base,
+      magnitude: clamp(base.magnitude + 0.06, 6, 9.5),
+      focalDepthKm: clamp(base.focalDepthKm * 1.1, 5, 100),
+      strikeDeg: (base.strikeDeg + 15) % 360,
+      dipDeg: clamp(base.dipDeg - 7, 5, 80),
+      rakeDeg: clamp(base.rakeDeg - 14, -180, 180),
+    },
+  ];
+  return variants.slice(0, count);
+}
+
 export function decodeBathymetry(buffer, expectedCells = GRID_WIDTH * GRID_HEIGHT) {
   if (buffer.byteLength !== expectedCells * 2) {
     throw new Error(`Bathymetry size mismatch: expected ${expectedCells * 2} bytes, got ${buffer.byteLength}`);

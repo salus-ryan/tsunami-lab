@@ -14,12 +14,12 @@ const waveCtx = waveCanvas.getContext('2d');
 const waveImage = waveCtx.createImageData(GRID_WIDTH, GRID_HEIGHT);
 
 const controls = {
-  magnitude: $('#magnitude'), depth: $('#depth'), strike: $('#strike'), dip: $('#dip'), rake: $('#rake'),
-  mechanism: $('#mechanism'), preset: $('#presetSelect'), speed: $('#speedSelect'),
+  magnitude: $('#magnitude'), depth: $('#depth'), strike: $('#strike'), dip: $('#dip'), rake: $('#rake'), tide: $('#tide'),
+  mechanism: $('#mechanism'), ensemble: $('#ensemble'), preset: $('#presetSelect'), speed: $('#speedSelect'),
 };
 const outputs = {
   magnitude: $('#magnitudeOutput'), depth: $('#depthOutput'), strike: $('#strikeOutput'),
-  dip: $('#dipOutput'), rake: $('#rakeOutput'),
+  dip: $('#dipOutput'), rake: $('#rakeOutput'), tide: $('#tideOutput'),
 };
 
 const PRESETS = {
@@ -86,6 +86,9 @@ function syncOutputs() {
   outputs.strike.value = `${controls.strike.value}°`;
   outputs.dip.value = `${controls.dip.value}°`;
   outputs.rake.value = `${controls.rake.value}°`;
+  const tide = Number(controls.tide.value);
+  outputs.tide.value = `${tide >= 0 ? '+' : ''}${tide.toFixed(1)} m`;
+  $('#tideBadge').textContent = `Tide ${tide >= 0 ? '+' : ''}${tide.toFixed(1)} m`;
   updateSourceMetrics(deriveEarthquake(currentEvent()));
 }
 
@@ -124,18 +127,27 @@ function renderWatchList(active = true) {
     const level = hazardClass(point.maxCoastalM);
     const arrival = point.arrivalSeconds == null ? 'No arrival yet' : `First signal ${formatSimTime(point.arrivalSeconds)}`;
     const value = point.maxCoastalM < 0.01 ? '&lt;0.01 m' : `${point.maxCoastalM.toFixed(point.maxCoastalM < 1 ? 2 : 1)} m`;
+    const range = point.ensembleCount > 1
+      ? `<div class="ensemble-range">range ${point.lowCoastalM.toFixed(2)}–${point.highCoastalM.toFixed(2)} m</div>`
+      : '';
     const width = Math.min(100, Math.max(1, point.maxCoastalM / 5 * 100));
-    return `<div class="watch-item ${level}"><div><div class="place">${point.name}</div><div class="arrival">${arrival}</div></div><div class="height">${value}</div><div class="bar"><i style="width:${width}%"></i></div></div>`;
+    return `<div class="watch-item ${level}"><div><div class="place">${point.name}</div><div class="arrival">${arrival}</div>${range}</div><div class="height">${value}</div><div class="bar"><i style="width:${width}%"></i></div></div>`;
   }).join('');
 }
 
 function updateWatchPoints(samples, timeSeconds) {
   for (let index = 0; index < watchState.length; index++) {
     const point = watchState[index];
-    const sample = samples[index];
-    if (!sample?.cell) continue;
-    const shoaling = Math.min(4.2, Math.max(1.15, (Math.max(20, sample.depthM) / 20) ** 0.25));
-    point.maxCoastalM = Math.max(point.maxCoastalM, sample.maxM * shoaling);
+    const members = samples[index] || [];
+    const coastalValues = members.filter(sample => sample?.cell).map(sample => {
+      const shoaling = Math.min(4.2, Math.max(1.15, (Math.max(20, sample.depthM) / 20) ** 0.25));
+      return sample.maxM * shoaling;
+    });
+    if (!coastalValues.length) continue;
+    point.ensembleCount = coastalValues.length;
+    point.maxCoastalM = Math.max(point.maxCoastalM, coastalValues[0]);
+    point.lowCoastalM = Math.min(...coastalValues);
+    point.highCoastalM = Math.max(...coastalValues);
     if (point.arrivalSeconds == null && point.maxCoastalM >= 0.05) point.arrivalSeconds = timeSeconds;
   }
   renderWatchList(true);
@@ -162,6 +174,7 @@ function handleWorkerMessage(event) {
   if (message.runId !== runId) return;
   if (message.type === 'triggered') {
     simulation.sourceAmplitudeM = message.sourceAmplitudeM;
+    document.body.dataset.ensembleCount = String(message.ensembleCount);
     updateSourceMetrics(message.derived, message.sourceAmplitudeM);
     return;
   }
@@ -355,7 +368,11 @@ function triggerQuake() {
   workerBusy = false;
   lastTick = performance.now();
   lastWatchUpdate = 0;
-  simulationWorker.postMessage({ type: 'trigger', runId, event });
+  simulationWorker.postMessage({
+    type: 'trigger', runId, event,
+    tideLevelM: Number(controls.tide.value),
+    ensembleMembers: Number(controls.ensemble.value),
+  });
   $('#pauseButton').disabled = false;
   $('#pauseButton').textContent = 'Pause';
   $('#startButton span').textContent = 'Restart quake';
@@ -399,7 +416,7 @@ canvas.addEventListener('pointerup', event => {
 });
 
 for (const [name, control] of Object.entries(controls)) {
-  if (name === 'preset' || name === 'speed' || name === 'mechanism') continue;
+  if (name === 'preset' || name === 'speed' || name === 'mechanism' || name === 'ensemble') continue;
   control.addEventListener('input', syncOutputs);
 }
 controls.mechanism.addEventListener('change', () => {
