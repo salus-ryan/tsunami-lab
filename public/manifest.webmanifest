@@ -1,13 +1,25 @@
 {
+  "id": "./",
   "name": "Tsunami Lab — Earthquake Wave Sandbox",
   "short_name": "Tsunami Lab",
   "description": "A physically grounded educational sandbox for exploring earthquake-generated tsunamis.",
+  "lang": "en",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#04111b",
   "theme_color": "#071927",
   "orientation": "any",
+  "categories": ["education", "science", "simulation"],
   "icons": [
-    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "screenshots": [
+    { "src": "./screenshots/desktop.jpg", "sizes": "1280x720", "type": "image/jpeg", "form_factor": "wide", "label": "Global wave simulation and earthquake source controls" },
+    { "src": "./screenshots/mobile.jpg", "sizes": "1024x2216", "type": "image/jpeg", "form_factor": "narrow", "label": "Mobile tsunami scenario simulation" }
   ]
 }

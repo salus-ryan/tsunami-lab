@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 
 async function waitForEarthData(page) {
@@ -81,6 +82,58 @@ test('single-member mode suppresses ensemble ranges', async ({ page }) => {
   await expect(page.locator('body')).toHaveAttribute('data-ensemble-count', '1');
   await expect(page.locator('.watch-item')).toHaveCount(10);
   await expect(page.locator('.ensemble-range')).toHaveCount(0);
+});
+
+test('shares a reproducible deep link and restores every scenario setting', async ({ page }) => {
+  await choosePreset(page, 'sumatra');
+  await page.locator('#tide').fill('-1.5');
+  await page.locator('#ensemble').selectOption('5');
+  await page.locator('#speedSelect').selectOption('12');
+  await page.getByRole('button', { name: 'Share link' }).click();
+  await expect.poll(() => new URL(page.url()).hash).toMatch(/^#scenario=/);
+
+  await page.reload();
+  await expect(page.locator('#statusText')).toHaveText('Epicenter ready');
+  await expect(page.locator('#coordinateLabel')).toHaveText('3.3°N, 95.9°E');
+  await expect(page.locator('#magnitudeOutput')).toHaveText('9.2');
+  await expect(page.locator('#tideOutput')).toHaveText('-1.5 m');
+  await expect(page.locator('#ensemble')).toHaveValue('5');
+  await expect(page.locator('#speedSelect')).toHaveValue('12');
+});
+
+test('saves, loads, and deletes scenarios only in browser storage', async ({ page }) => {
+  await choosePreset(page, 'tohoku');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Scenario saved');
+  await page.locator('#magnitude').fill('7');
+
+  await page.getByRole('button', { name: 'Saved scenarios' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Saved scenarios' });
+  await expect(dialog.locator('.saved-scenario')).toHaveCount(1);
+  await expect(dialog.locator('.saved-scenario')).toContainText('M9.1');
+  await dialog.getByRole('button', { name: 'Load' }).click();
+  await expect(page.locator('#magnitudeOutput')).toHaveText('9.1');
+
+  await page.getByRole('button', { name: 'Saved scenarios' }).click();
+  await page.getByRole('button', { name: /^Delete M9\.1/ }).click();
+  await expect(page.getByText('No saved scenarios yet.')).toBeVisible();
+});
+
+test('exports a versioned local JSON report with scenario and coastal results', async ({ page }) => {
+  await page.locator('#ensemble').selectOption('1');
+  await choosePreset(page, 'aleutian');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect.poll(() => page.locator('#simTime').textContent()).not.toBe('00:00');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export results' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^tsunami-lab-\d{4}-\d{2}-\d{2}\.json$/);
+  const report = JSON.parse(await readFile(await download.path(), 'utf8'));
+  expect(report.product).toBe('Tsunami Lab');
+  expect(report.version).toBe('1.1.0');
+  expect(report.disclaimer).toContain('not an operational forecast');
+  expect(report.scenario.event.magnitude).toBe(8.8);
+  expect(report.coastalWatch).toHaveLength(10);
 });
 
 test('runs, pauses, resumes, and resets a tsunami simulation', async ({ page }) => {
@@ -209,12 +262,42 @@ test('installs its service worker and reloads its complete app shell offline', a
   }
 });
 
+test('publishes a transparent privacy notice with local-data disclosures', async ({ page }) => {
+  await page.goto('./privacy.html');
+  await expect(page).toHaveTitle('Privacy — Tsunami Lab');
+  await expect(page.getByRole('heading', { name: 'Your simulations stay yours' })).toBeVisible();
+  await expect(page.getByText('does not collect names')).toBeVisible();
+  await expect(page.getByText('URL fragments are not sent')).toBeVisible();
+  await page.getByRole('link', { name: 'Return to Tsunami Lab' }).click();
+  await expect(page.getByRole('heading', { name: 'Tsunami Lab', exact: true })).toBeVisible();
+});
+
 test('serves the PWA manifest and simulation datasets', async ({ request }) => {
   const manifestResponse = await request.get('./manifest.webmanifest');
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
   expect(manifest.name).toContain('Tsunami Lab');
   expect(manifest.display).toBe('standalone');
+  expect(manifest.icons).toEqual(expect.arrayContaining([
+    expect.objectContaining({ sizes: '192x192', type: 'image/png' }),
+    expect.objectContaining({ sizes: '512x512', type: 'image/png', purpose: 'maskable' }),
+  ]));
+  expect(manifest.screenshots).toHaveLength(2);
+  for (const screenshot of manifest.screenshots) {
+    const screenshotResponse = await request.get(screenshot.src);
+    expect(screenshotResponse.ok()).toBeTruthy();
+    expect((await screenshotResponse.body()).byteLength).toBeGreaterThan(30_000);
+  }
+
+  for (const icon of ['icon-192.png', 'icon-512.png']) {
+    const iconResponse = await request.get(`./${icon}`);
+    expect(iconResponse.ok()).toBeTruthy();
+    expect((await iconResponse.body()).byteLength).toBeGreaterThan(10_000);
+  }
+
+  const privacy = await request.get('./privacy.html');
+  expect(privacy.ok()).toBeTruthy();
+  expect(await privacy.text()).toContain('no analytics');
 
   const bathymetry = await request.get('./data/bathymetry.bin');
   expect(bathymetry.ok()).toBeTruthy();

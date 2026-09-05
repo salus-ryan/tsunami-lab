@@ -29,7 +29,7 @@ npx playwright install chromium
 
 Playwright starts the app server automatically. Failure traces, screenshots, and videos are saved under `test-results/`; the HTML report is written to `playwright-report/`.
 
-The E2E suite covers initial loading, responsive canvas layout, Web Worker startup, one-degree grid metadata, finite-fault patches, rake/mechanism coupling, presets, ocean/land selection, wave start/pause/resume/reset, high-speed responsiveness, coastal-watch updates, scientific disclosures, PWA assets, service-worker installation, and a fully offline reload. Every browser scenario runs in desktop Chromium and a Pixel 7 viewport.
+The E2E suite covers initial loading, responsive canvas layout, Web Worker startup, one-degree grid metadata, finite-fault patches, rake/mechanism coupling, presets, ocean/land selection, wave start/pause/resume/reset, high-speed responsiveness, coastal-watch updates, scenario saving/sharing/export, privacy disclosures, PWA assets, service-worker installation, and a fully offline reload. Every browser scenario runs in desktop Chromium and a Pixel 7 viewport.
 
 Run the same suite against the deployed site without starting a local server:
 
@@ -44,6 +44,9 @@ PLAYWRIGHT_BASE_URL=https://salus-ryan.github.io/tsunami-lab/ npm run test:e2e
 3. Trigger the earthquake and watch crest/trough propagation.
 4. Change simulation speed, pause, or reset.
 5. Review maximum coastal-wave proxies and first-signal times at watch points.
+6. Save scenarios locally, share reproducible URL links, or export a JSON result report.
+
+Saved scenarios never leave the device. Shared settings live in the URL fragment, and exports are generated entirely in the browser. See the in-app [privacy notice](https://salus-ryan.github.io/tsunami-lab/privacy.html).
 
 The included presets are **inspired by** historical source regions. They are not event reconstructions.
 
@@ -75,7 +78,7 @@ Coastal watch values apply a capped Green's-law-inspired shoaling factor to the 
 - **Bathymetry:** a bundled, downsampled grid derived from Mapzen Terrarium global elevation tiles. Terrarium combines elevation sources including NASA SRTM and ocean bathymetry datasets.
 - **Coastline:** Natural Earth 1:110m land polygons (public domain).
 
-The app shell and datasets are cached by a service worker, so the simulator works offline after the first successful load.
+The app shell and datasets are cached by a service worker, so the simulator works offline after the first successful load. Production updates are offered in-app and activate only when the user accepts them.
 
 ## Deployment
 
@@ -87,6 +90,6 @@ The workflow in `.github/workflows/test.yml` publishes the `public/` directory. 
 
 ## Critical limitations
 
-This is **not an operational forecast**. Its one-degree cells cannot resolve bays, harbors, local topography, nonlinear inundation, tides, dispersion, wetting/drying, or elastic Okada displacement. The empirical finite fault is not an event reconstruction. Do not use it for emergency planning or safety decisions. Follow official national authorities and tsunami warning centers.
+This is **not an operational forecast**. Its one-degree cells cannot resolve bays, harbors, local topography, nonlinear inundation, regional tide forecasts, dispersion, wetting/drying, or elastic Okada displacement. The empirical finite fault is not an event reconstruction. Do not use it for emergency planning or safety decisions. Follow official national authorities and tsunami warning centers.
 
 For research-grade modeling, replace the solver with a validated package such as NOAA MOST, GeoClaw, or COMCOT; use high-resolution bathymetry/topography; calibrate against gauges; and have domain experts validate every scenario.

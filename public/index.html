@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#071927">
   <meta name="description" content="Explore how undersea earthquakes generate and propagate tsunamis with a physically grounded educational model.">
   <link rel="manifest" href="./manifest.webmanifest">
@@ -17,7 +17,9 @@
       <div><h1>Tsunami Lab</h1><p>Global earthquake wave sandbox</p></div>
     </div>
     <div class="header-actions">
+      <button id="updateButton" class="icon-button update hidden" type="button">Update</button>
       <button id="installButton" class="icon-button hidden" type="button" aria-label="Install app">Install</button>
+      <button id="scenarioButton" class="icon-button" type="button" aria-label="Saved scenarios">Saved</button>
       <button id="aboutButton" class="icon-button round" type="button" aria-label="About the model">i</button>
     </div>
   </header>
@@ -25,11 +27,11 @@
   <main>
     <section class="map-card" aria-label="Interactive tsunami map">
       <div class="map-toolbar">
-        <div class="status-dot"><span id="statusLight"></span><strong id="statusText">Loading Earth data…</strong></div>
-        <div class="sim-clock"><span>SIM TIME</span><strong id="simTime">00:00</strong></div>
+        <div class="status-dot"><span id="statusLight"></span><strong id="statusText" aria-live="polite">Loading Earth data…</strong></div>
+        <div class="sim-clock"><span>SIM TIME</span><strong id="simTime" role="timer">00:00</strong></div>
       </div>
       <div id="mapWrap" class="map-wrap">
-        <canvas id="mapCanvas" aria-label="World map. Tap ocean water to place an earthquake epicenter."></canvas>
+        <canvas id="mapCanvas" aria-label="World map. Tap ocean water to place an earthquake epicenter." aria-describedby="mapHint"></canvas>
         <div class="map-hint" id="mapHint">Tap any ocean to place the epicenter</div>
         <div class="legend" aria-hidden="true"><span class="negative"></span>trough <span class="positive"></span>crest</div>
       </div>
@@ -108,6 +110,11 @@
         <div><span>Initial wave</span><strong>—</strong></div>
         <div><span>Fault patches</span><strong>—</strong></div>
       </div>
+      <div class="scenario-actions" aria-label="Scenario actions">
+        <button id="saveButton" class="secondary" type="button" disabled>Save</button>
+        <button id="shareButton" class="secondary" type="button" disabled>Share link</button>
+        <button id="exportButton" class="secondary" type="button" disabled>Export results</button>
+      </div>
     </section>
 
     <section class="impact-card">
@@ -120,20 +127,32 @@
     </section>
 
     <p class="disclaimer"><strong>Educational model—not a forecast.</strong> Results are coarse approximations and must never guide emergency decisions. Follow official tsunami warning centers.</p>
+    <footer><span>Tsunami Lab v1.1</span><a href="./privacy.html">Privacy</a><a href="https://github.com/salus-ryan/tsunami-lab/issues" target="_blank" rel="noreferrer">Support</a></footer>
   </main>
 
-  <dialog id="aboutDialog">
+  <dialog id="aboutDialog" aria-labelledby="aboutTitle">
     <form method="dialog">
       <button class="dialog-close" aria-label="Close">×</button>
       <div class="dialog-wave">≋</div>
-      <h2>About Tsunami Lab</h2>
+      <h2 id="aboutTitle">About Tsunami Lab</h2>
       <p>This sandbox advances mass and momentum on a staggered, depth-varying shallow-water grid. A progressive multi-patch finite fault uses earthquake moment, rupture area, heterogeneous slip, rake, strike, dip, and focal-depth coupling. Deterministic source ensembles expose sensitivity to uncertain fault parameters.</p>
       <h3>What is modeled</h3>
       <ul><li>One-degree global terrain-derived ocean depths adjusted for tidal stage</li><li>Mass-conserving face transports and adaptive CFL time steps</li><li>Progressive rupture at an approximate 2.6 km/s</li><li>Depth-dependent wave speed, bottom friction, Coriolis rotation, and source uncertainty ranges</li></ul>
       <h3>Important limitations</h3>
-      <ul><li>One-degree cells cannot resolve bays, harbors, or local inundation</li><li>The finite fault is empirical—not an Okada elastic-dislocation solution</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Tides, dispersion, nonlinear run-up, and wetting/drying are omitted</li></ul>
+      <ul><li>One-degree cells cannot resolve bays, harbors, or local inundation</li><li>The finite fault is empirical—not an Okada elastic-dislocation solution</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Regional tide forecasts, dispersion, nonlinear run-up, and wetting/drying are omitted</li></ul>
       <p class="source-note">Terrain source: Mapzen Terrarium global elevation tiles (NASA SRTM and ocean bathymetry sources). Coastline: Natural Earth. Neither dataset implies endorsement.</p>
       <button class="primary dialog-done">Understood</button>
+    </form>
+  </dialog>
+
+  <dialog id="scenarioDialog" aria-labelledby="scenarioTitle">
+    <form method="dialog">
+      <button class="dialog-close" aria-label="Close scenario library">×</button>
+      <div class="dialog-wave" aria-hidden="true">≋</div>
+      <h2 id="scenarioTitle">Saved scenarios</h2>
+      <p>Scenarios stay only on this device. Shared links encode settings in the URL and do not upload data.</p>
+      <div id="scenarioList" class="scenario-list"></div>
+      <button class="secondary dialog-done">Done</button>
     </form>
   </dialog>
 

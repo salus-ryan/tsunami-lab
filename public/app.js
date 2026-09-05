@@ -3,8 +3,11 @@ import {
   TsunamiSimulation, decodeBathymetry, deriveEarthquake, defaultRakeForMechanism,
   formatSimTime, wrapLongitude,
 } from './simulation.js';
+import { decodeScenarioHash, encodeScenarioHash, normalizeScenario } from './scenario.js';
 
 const $ = selector => document.querySelector(selector);
+const APP_VERSION = '1.1.0';
+const SCENARIO_STORAGE_KEY = 'tsunami-lab-scenarios-v1';
 const canvas = $('#mapCanvas');
 const ctx = canvas.getContext('2d');
 const waveCanvas = document.createElement('canvas');
@@ -68,6 +71,169 @@ function currentEvent() {
     rakeDeg: Number(controls.rake.value),
     mechanism: controls.mechanism.value,
   };
+}
+
+function currentScenario() {
+  if (!selected) return null;
+  return normalizeScenario({
+    event: currentEvent(),
+    tideLevelM: Number(controls.tide.value),
+    ensembleMembers: Number(controls.ensemble.value),
+    speed: Number(controls.speed.value),
+  });
+}
+
+function scenarioName(scenario) {
+  const { event } = scenario;
+  const latitude = `${Math.abs(event.latitude).toFixed(1)}°${event.latitude >= 0 ? 'N' : 'S'}`;
+  const longitude = `${Math.abs(event.longitude).toFixed(1)}°${event.longitude >= 0 ? 'E' : 'W'}`;
+  return `M${event.magnitude.toFixed(1)} · ${latitude}, ${longitude}`;
+}
+
+function loadSavedScenarios() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY) || '[]');
+    if (!Array.isArray(saved)) return [];
+    return saved.flatMap(item => {
+      try {
+        return [{ ...normalizeScenario(item), id: String(item.id), name: String(item.name), savedAt: String(item.savedAt) }];
+      } catch {
+        return [];
+      }
+    }).slice(0, 25);
+  } catch {
+    return [];
+  }
+}
+
+function storeSavedScenarios(scenarios) {
+  localStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(scenarios));
+}
+
+function saveCurrentScenario() {
+  const scenario = currentScenario();
+  if (!scenario) return;
+  const saved = loadSavedScenarios();
+  saved.unshift({
+    ...scenario,
+    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    name: scenarioName(scenario),
+    savedAt: new Date().toISOString(),
+  });
+  try {
+    storeSavedScenarios(saved.slice(0, 25));
+    renderScenarioLibrary();
+    showToast('Scenario saved on this device.');
+  } catch {
+    showToast('This browser could not save the scenario.');
+  }
+}
+
+function applyScenario(scenario) {
+  const normalized = normalizeScenario(scenario);
+  const { event } = normalized;
+  controls.magnitude.value = event.magnitude;
+  controls.depth.value = event.focalDepthKm;
+  controls.strike.value = event.strikeDeg;
+  controls.dip.value = event.dipDeg;
+  controls.rake.value = event.rakeDeg;
+  controls.mechanism.value = event.mechanism;
+  controls.tide.value = normalized.tideLevelM;
+  controls.ensemble.value = normalized.ensembleMembers;
+  controls.speed.value = normalized.speed;
+  controls.preset.value = 'custom';
+  selectEpicenter(event.longitude, event.latitude);
+  syncOutputs();
+}
+
+function renderScenarioLibrary() {
+  const list = $('#scenarioList');
+  const saved = loadSavedScenarios();
+  list.replaceChildren();
+  if (!saved.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = 'No saved scenarios yet.';
+    list.append(empty);
+    return;
+  }
+  for (const scenario of saved) {
+    const item = document.createElement('article');
+    item.className = 'saved-scenario';
+    const summary = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = scenario.name;
+    const details = document.createElement('span');
+    details.textContent = `${scenario.ensembleMembers} member${scenario.ensembleMembers === 1 ? '' : 's'} · tide ${scenario.tideLevelM >= 0 ? '+' : ''}${scenario.tideLevelM.toFixed(1)} m`;
+    summary.append(title, details);
+    const actions = document.createElement('div');
+    const load = document.createElement('button');
+    load.type = 'button'; load.className = 'secondary'; load.textContent = 'Load';
+    load.addEventListener('click', () => {
+      applyScenario(scenario);
+      $('#scenarioDialog').close();
+      showToast('Saved scenario loaded.');
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'text-button'; remove.textContent = 'Delete';
+    remove.setAttribute('aria-label', `Delete ${scenario.name}`);
+    remove.addEventListener('click', () => {
+      storeSavedScenarios(saved.filter(item => item.id !== scenario.id));
+      renderScenarioLibrary();
+    });
+    actions.append(load, remove);
+    item.append(summary, actions);
+    list.append(item);
+  }
+}
+
+async function shareCurrentScenario() {
+  const scenario = currentScenario();
+  if (!scenario) return;
+  history.replaceState(null, '', `${location.pathname}${location.search}${encodeScenarioHash(scenario)}`);
+  const shareData = { title: 'Tsunami Lab scenario', text: scenarioName(scenario), url: location.href };
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData);
+      showToast('Scenario shared.');
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(location.href);
+    showToast('Share link copied.');
+  } catch {
+    showToast('Share link is ready in the address bar.');
+  }
+}
+
+function exportResults() {
+  const scenario = currentScenario();
+  if (!scenario || !simulation?.event) return;
+  const report = {
+    product: 'Tsunami Lab',
+    version: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    disclaimer: 'Educational model—not an operational forecast.',
+    scenario,
+    simulationTimeSeconds: simulation.timeSeconds,
+    coastalWatch: watchState.map(({ name, lat, lon, maxCoastalM, lowCoastalM, highCoastalM, arrivalSeconds }) => ({
+      name, latitude: lat, longitude: lon, centralWaveM: maxCoastalM,
+      ensembleMinimumM: lowCoastalM ?? maxCoastalM,
+      ensembleMaximumM: highCoastalM ?? maxCoastalM,
+      firstSignalSeconds: arrivalSeconds,
+    })),
+  };
+  const blob = new Blob([`${JSON.stringify(report, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `tsunami-lab-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  showToast('Results exported as JSON.');
 }
 
 function updateSourceMetrics(derived, initialWave = null) {
@@ -314,7 +480,7 @@ function resetWorkerState() {
 }
 
 function selectEpicenter(longitude, latitude, fromPreset = false) {
-  if (!ready) return;
+  if (!ready) return false;
   longitude = wrapLongitude(longitude);
   const selectedCell = simulation.cellFor(longitude, latitude);
   const selectedDepth = simulation.depths[selectedCell.index];
@@ -322,7 +488,7 @@ function selectEpicenter(longitude, latitude, fromPreset = false) {
   canvas.dataset.selectedDepth = selectedDepth === LAND ? 'land' : String(selectedDepth);
   if (selectedDepth === LAND) {
     showToast('Choose ocean water—the selected cell is on land.');
-    return;
+    return false;
   }
   running = false;
   resetWorkerState();
@@ -332,14 +498,19 @@ function selectEpicenter(longitude, latitude, fromPreset = false) {
   $('#coordinateLabel').textContent = `${Math.abs(latitude).toFixed(1)}°${latitude >= 0 ? 'N' : 'S'}, ${Math.abs(longitude).toFixed(1)}°${longitude >= 0 ? 'E' : 'W'}`;
   $('#mapHint').classList.add('dismissed');
   $('#startButton').disabled = false;
+  $('#startButton span').textContent = 'Trigger quake';
   $('#pauseButton').disabled = true;
   $('#pauseButton').textContent = 'Pause';
+  $('#saveButton').disabled = false;
+  $('#shareButton').disabled = false;
+  $('#exportButton').disabled = true;
   $('#simTime').textContent = '00:00';
   setStatus('Epicenter ready');
   resetWatchState();
   syncOutputs();
   updateWaveTexture();
   renderMap();
+  return true;
 }
 
 function applyPreset(name) {
@@ -376,6 +547,7 @@ function triggerQuake() {
   $('#pauseButton').disabled = false;
   $('#pauseButton').textContent = 'Pause';
   $('#startButton span').textContent = 'Restart quake';
+  $('#exportButton').disabled = false;
   setStatus(`M${event.magnitude.toFixed(1)} wave propagating`, 'running');
   updateSourceMetrics(derived, derived.verticalDisplacementM);
   updateWaveTexture();
@@ -390,6 +562,7 @@ function resetSimulation() {
   $('#pauseButton').disabled = true;
   $('#pauseButton').textContent = 'Pause';
   $('#startButton span').textContent = 'Trigger quake';
+  $('#exportButton').disabled = true;
   setStatus(selected ? 'Epicenter ready' : 'Ready—select an ocean');
   resetWatchState();
   syncOutputs();
@@ -434,6 +607,13 @@ $('#pauseButton').addEventListener('click', () => {
   setStatus(running ? 'Wave propagating' : 'Simulation paused', running ? 'running' : 'ready');
 });
 $('#aboutButton').addEventListener('click', () => $('#aboutDialog').showModal());
+$('#scenarioButton').addEventListener('click', () => {
+  renderScenarioLibrary();
+  $('#scenarioDialog').showModal();
+});
+$('#saveButton').addEventListener('click', saveCurrentScenario);
+$('#shareButton').addEventListener('click', shareCurrentScenario);
+$('#exportButton').addEventListener('click', exportResults);
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('beforeinstallprompt', event => {
   event.preventDefault();
@@ -477,6 +657,13 @@ async function initialize() {
     updateWaveTexture();
     resizeCanvas();
     syncOutputs();
+    const sharedScenario = decodeScenarioHash(location.hash);
+    if (sharedScenario) {
+      applyScenario(sharedScenario);
+      showToast('Shared scenario loaded.');
+    } else if (location.hash.startsWith('#scenario=')) {
+      showToast('That shared scenario link is invalid.');
+    }
     requestAnimationFrame(animationLoop);
   } catch (error) {
     console.error(error);
@@ -486,6 +673,32 @@ async function initialize() {
 }
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(console.warn));
+  window.addEventListener('load', async () => {
+    try {
+      let reloading = false;
+      const hadController = Boolean(navigator.serviceWorker.controller);
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloading) return;
+        reloading = true;
+        location.reload();
+      });
+      const registration = await navigator.serviceWorker.register('./sw.js');
+      const offerUpdate = () => $('#updateButton').classList.remove('hidden');
+      if (registration.waiting && navigator.serviceWorker.controller) offerUpdate();
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) offerUpdate();
+        });
+      });
+      $('#updateButton').addEventListener('click', () => registration.waiting?.postMessage({ type: 'skipWaiting' }));
+    } catch (error) {
+      console.warn('Service worker registration failed', error);
+    }
+  });
 }
+window.addEventListener('appinstalled', () => {
+  $('#installButton').classList.add('hidden');
+  showToast('Tsunami Lab installed.');
+});
 initialize();

@@ -28,6 +28,10 @@ body {
 button, input, select { font: inherit; }
 button, select { color: inherit; }
 button { cursor: pointer; }
+a { color: var(--cyan); }
+:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+button:disabled { cursor: not-allowed; }
+.brand-link { color: inherit; text-decoration: none; }
 .app-header {
   height: 68px;
   padding: 10px max(16px, env(safe-area-inset-left));
@@ -68,6 +72,7 @@ h1, h2, p { margin: 0; }
   font-weight: 750;
 }
 .icon-button.round { width: 38px; padding: 0; border-radius: 50%; font-family: Georgia, serif; font-size: 17px; }
+.icon-button.update { border-color: rgba(65,229,224,.4); color: var(--cyan); }
 .hidden { display: none !important; }
 main { width: min(1100px, 100%); margin: 0 auto; padding: 14px 12px calc(28px + var(--safe-bottom)); }
 .map-card, .control-card, .impact-card {
@@ -155,6 +160,8 @@ input[type="range"] { width: 100%; height: 22px; margin: 0; accent-color: var(--
 .source-metrics div { padding: 10px; background: #0a2638; text-align: center; }
 .source-metrics span { display: block; color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .07em; }
 .source-metrics strong { display: block; margin-top: 4px; font-size: 11px; color: #dff9ff; }
+.scenario-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.scenario-actions button { min-height: 38px; padding: 0 8px; font-size: 10px; }
 .impact-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .uncertainty, .tide-badge { font-size: 8px; padding: 5px 7px; border-radius: 7px; white-space: nowrap; }
 .uncertainty { color: #e7b866; background: rgba(231,184,102,.1); }
@@ -189,6 +196,25 @@ dialog p, dialog li { color: #a9c3cd; font-size: 11px; line-height: 1.55; }
 dialog ul { margin: 0; padding-left: 18px; }
 .source-note { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 15px; color: #7799a8; }
 .dialog-done { width: 100%; margin-top: 16px; }
+.scenario-list { display: grid; gap: 8px; margin-top: 16px; max-height: min(48vh, 420px); overflow: auto; }
+.saved-scenario { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #0a2638; }
+.saved-scenario strong, .saved-scenario span { display: block; }
+.saved-scenario strong { font-size: 11px; }
+.saved-scenario span { color: var(--muted); font-size: 9px; margin-top: 3px; }
+.saved-scenario > div:last-child { display: flex; align-items: center; gap: 6px; }
+.saved-scenario button.secondary { min-height: 34px; padding: 0 12px; }
+.text-button { border: 0; background: transparent; color: #ef9797; padding: 8px; font-size: 9px; }
+footer { display: flex; justify-content: center; gap: 16px; color: #648797; font-size: 9px; padding: 6px 12px; }
+footer a { color: #8fb3c1; }
+.legal-page main { display: block; width: min(760px, 100%); }
+.legal-card { border: 1px solid var(--line); background: linear-gradient(155deg, rgba(13,40,57,.96), rgba(7,28,42,.96)); border-radius: 18px; padding: clamp(20px, 5vw, 42px); box-shadow: 0 16px 50px rgba(0,0,0,.22); }
+.legal-card .eyebrow { color: var(--cyan); font-size: 9px; letter-spacing: .14em; font-weight: 850; }
+.legal-card h2 { margin: 7px 0 12px; font-size: clamp(22px, 5vw, 32px); }
+.legal-card h3 { margin: 23px 0 7px; color: #cbeaf2; font-size: 13px; }
+.legal-card p { color: #9cbbc7; font-size: 12px; line-height: 1.7; }
+.legal-card .legal-lead { color: #c4dce5; font-size: 14px; }
+.legal-card code { padding: 2px 5px; border-radius: 4px; background: #061924; color: #a9edeb; }
+.link-button { display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 19px; border-radius: 11px; text-decoration: none; font-weight: 800; font-size: 12px; color: #00262d; background: linear-gradient(135deg,#53eee8,#31bad0); }
 @media (min-width: 760px) {
   main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(310px, .85fr); gap: 14px; align-items: start; }
   .map-card { grid-row: span 2; }
@@ -199,11 +225,20 @@ dialog ul { margin: 0; padding-left: 18px; }
   .watch-list { grid-template-columns: repeat(5, 1fr); }
 }
 @media (max-width: 430px) {
+  .app-header { padding-inline: 10px; }
+  .brand { gap: 7px; }
+  .logo { width: 36px; height: 36px; border-radius: 11px; }
+  .header-actions { gap: 4px; }
+  .icon-button { min-height: 36px; padding: 0 8px; font-size: 10px; }
   .transport { grid-template-columns: auto 1fr auto; }
   .speed-label { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-end; gap: 7px; }
   .speed-label select { margin: 0; }
   button.primary, button.secondary { padding: 0 12px; }
   .control-grid { gap: 16px 12px; }
   .source-metrics { grid-template-columns: repeat(2, 1fr); }
+  .scenario-actions { grid-template-columns: 1fr; }
+  .scenario-actions button { min-height: 40px; }
+  .saved-scenario { align-items: flex-start; flex-direction: column; }
+  .saved-scenario > div:last-child { width: 100%; justify-content: flex-end; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
