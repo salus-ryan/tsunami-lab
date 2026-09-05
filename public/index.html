@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#071927">
+  <meta name="description" content="Explore how undersea earthquakes generate and propagate tsunamis with a physically grounded educational model.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Tsunami Lab</title>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">≋</div>
+      <div><h1>Tsunami Lab</h1><p>Global earthquake wave sandbox</p></div>
+    </div>
+    <div class="header-actions">
+      <button id="installButton" class="icon-button hidden" type="button" aria-label="Install app">Install</button>
+      <button id="aboutButton" class="icon-button round" type="button" aria-label="About the model">i</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="map-card" aria-label="Interactive tsunami map">
+      <div class="map-toolbar">
+        <div class="status-dot"><span id="statusLight"></span><strong id="statusText">Loading Earth data…</strong></div>
+        <div class="sim-clock"><span>SIM TIME</span><strong id="simTime">00:00</strong></div>
+      </div>
+      <div id="mapWrap" class="map-wrap">
+        <canvas id="mapCanvas" aria-label="World map. Tap ocean water to place an earthquake epicenter."></canvas>
+        <div class="map-hint" id="mapHint">Tap any ocean to place the epicenter</div>
+        <div class="legend" aria-hidden="true"><span class="negative"></span>trough <span class="positive"></span>crest</div>
+      </div>
+      <div class="transport">
+        <button id="resetButton" type="button" class="secondary">Reset</button>
+        <button id="startButton" type="button" class="primary" disabled><span>Trigger quake</span></button>
+        <button id="pauseButton" type="button" class="secondary" disabled>Pause</button>
+        <label class="speed-label">Speed
+          <select id="speedSelect" aria-label="Simulation speed">
+            <option value="1">1×</option>
+            <option value="4" selected>4×</option>
+            <option value="12">12×</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="control-card">
+      <div class="section-title"><div><span>EARTHQUAKE SOURCE</span><h2 id="coordinateLabel">No epicenter selected</h2></div></div>
+      <label class="preset-label">Scenario
+        <select id="presetSelect">
+          <option value="custom">Custom location</option>
+          <option value="tohoku">2011 Tōhoku-like</option>
+          <option value="chile">1960 Chile-like</option>
+          <option value="sumatra">2004 Sumatra-like</option>
+          <option value="aleutian">Aleutian subduction</option>
+        </select>
+      </label>
+
+      <div class="slider-row featured">
+        <div class="slider-heading"><label for="magnitude">Moment magnitude</label><output id="magnitudeOutput">8.5</output></div>
+        <input id="magnitude" type="range" min="6.0" max="9.5" value="8.5" step="0.1">
+        <div class="range-labels"><span>M6.0</span><span>M9.5</span></div>
+      </div>
+
+      <div class="control-grid">
+        <div class="slider-row">
+          <div class="slider-heading"><label for="depth">Focal depth</label><output id="depthOutput">20 km</output></div>
+          <input id="depth" type="range" min="5" max="100" value="20" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="slider-heading"><label for="strike">Fault strike</label><output id="strikeOutput">15°</output></div>
+          <input id="strike" type="range" min="0" max="359" value="15" step="1">
+        </div>
+        <div class="slider-row">
+          <div class="slider-heading"><label for="dip">Fault dip</label><output id="dipOutput">18°</output></div>
+          <input id="dip" type="range" min="5" max="80" value="18" step="1">
+        </div>
+        <label class="select-control">Fault mechanism
+          <select id="mechanism">
+            <option value="subduction">Subduction thrust</option>
+            <option value="normal">Normal fault</option>
+            <option value="strike-slip">Strike-slip</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="sourceMetrics" class="source-metrics">
+        <div><span>Rupture</span><strong>—</strong></div>
+        <div><span>Mean slip</span><strong>—</strong></div>
+        <div><span>Initial wave</span><strong>—</strong></div>
+      </div>
+    </section>
+
+    <section class="impact-card">
+      <div class="section-title">
+        <div><span>COASTAL WATCH</span><h2>Estimated maximum coastal wave</h2></div>
+        <div class="uncertainty">± large uncertainty</div>
+      </div>
+      <div id="watchList" class="watch-list"><div class="empty-state">Run a scenario to populate coastal estimates.</div></div>
+      <div class="hazard-key"><span><i class="low"></i>&lt;0.3 m</span><span><i class="advisory"></i>0.3–1 m</span><span><i class="warning"></i>1–3 m</span><span><i class="severe"></i>&gt;3 m</span></div>
+    </section>
+
+    <p class="disclaimer"><strong>Educational model—not a forecast.</strong> Results are coarse approximations and must never guide emergency decisions. Follow official tsunami warning centers.</p>
+  </main>
+
+  <dialog id="aboutDialog">
+    <form method="dialog">
+      <button class="dialog-close" aria-label="Close">×</button>
+      <div class="dialog-wave">≋</div>
+      <h2>About Tsunami Lab</h2>
+      <p>This sandbox solves a linear, depth-varying shallow-water wave equation on a coarse global grid. Earthquake moment, empirical rupture area, slip, dip, mechanism, and focal-depth coupling create an idealized initial sea-surface displacement.</p>
+      <h3>What is real</h3>
+      <ul><li>Global terrain-derived ocean depths</li><li>Wave speed varies approximately as √(gravity × depth)</li><li>Continents reflect and channel waves</li><li>Earthquake scaling follows standard moment relations</li></ul>
+      <h3>Important limitations</h3>
+      <ul><li>Two-degree cells cannot model bays, harbors, or local inundation</li><li>The source is idealized—not a finite-fault reconstruction</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Tides, dispersion, friction, and nonlinear run-up are omitted</li></ul>
+      <p class="source-note">Terrain source: Mapzen Terrarium global elevation tiles (NASA SRTM and ocean bathymetry sources). Coastline: Natural Earth. Neither dataset implies endorsement.</p>
+      <button class="primary dialog-done">Understood</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

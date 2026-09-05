@@ -1,0 +1,30 @@
+{
+  "name": "tsunami-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mobile-first educational simulator for earthquake-generated tsunami propagation.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --project=mobile-chromium",
+    "test:e2e:headed": "playwright test --headed --project=desktop-chromium",
+    "test:all": "npm test && npm run test:e2e",
+    "check": "node --check public/app.js && node --check public/simulation.js && node --check server.js && node --check playwright.config.js && node --check e2e/app.spec.js",
+    "data:build": "node scripts/generate-bathymetry.cjs"
+  },
+  "keywords": [
+    "tsunami",
+    "earthquake",
+    "simulation",
+    "pwa",
+    "education"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "pngjs": "^7.0.0"
+  }
+}
