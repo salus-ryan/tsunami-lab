@@ -1,6 +1,7 @@
-const CACHE = 'tsunami-lab-v5';
+const CACHE = 'tsunami-lab-v6';
 const APP_SHELL = [
   './', './index.html', './styles.css', './app.js', './simulation.js', './simulation-worker.js', './scenario.js',
+  './config.json', './model-metadata.json', './schemas/scenario.schema.json', './schemas/report.schema.json',
   './privacy.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png',
   './data/bathymetry.bin', './data/land.geojson',
 ];

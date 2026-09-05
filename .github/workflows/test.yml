@@ -25,6 +25,15 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - run: npm audit --audit-level=high
+      - name: Generate CycloneDX SBOM
+        run: mkdir -p artifacts && npm sbom --sbom-format cyclonedx > artifacts/tsunami-lab-sbom.cdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsunami-lab-sbom
+          path: artifacts/tsunami-lab-sbom.cdx.json
+          retention-days: 90
 
   playwright:
     runs-on: ubuntu-latest
@@ -55,9 +64,30 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build hardened image
+        run: docker build --tag tsunami-lab:${GITHUB_SHA} .
+      - name: Verify health and security headers
+        run: |
+          docker run --detach --rm --name tsunami-lab-ci --publish 127.0.0.1:8080:8080 tsunami-lab:${GITHUB_SHA}
+          trap 'docker stop tsunami-lab-ci' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:8080/healthz && break
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8080/healthz | grep '"status":"ok"'
+          headers="$(curl --fail --silent --head http://127.0.0.1:8080/)"
+          grep -qi '^Content-Security-Policy:' <<< "$headers"
+          grep -qi '^Permissions-Policy:' <<< "$headers"
+          grep -qi '^X-Content-Type-Options: nosniff' <<< "$headers"
+
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: [unit, playwright]
+    needs: [unit, playwright, container]
     runs-on: ubuntu-latest
     permissions:
       contents: read

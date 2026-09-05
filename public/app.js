@@ -59,6 +59,12 @@ let lastWatchUpdate = 0;
 let toastTimer;
 let deferredInstallPrompt;
 let watchState = [];
+let deploymentConfig = {
+  deploymentId: 'default', productName: 'Tsunami Lab', organizationName: null,
+  supportUrl: 'https://github.com/salus-ryan/tsunami-lab/issues', privacyUrl: './privacy.html',
+  telemetryEnabled: false, dataResidency: 'client-only',
+};
+let modelMetadata;
 
 function currentEvent() {
   return {
@@ -71,6 +77,53 @@ function currentEvent() {
     rakeDeg: Number(controls.rake.value),
     mechanism: controls.mechanism.value,
   };
+}
+
+function safeLink(value, fallback) {
+  try {
+    const url = new URL(value, location.href);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function applyDeploymentConfig(input) {
+  if (!input || input.schemaVersion !== 1 || input.telemetryEnabled !== false) {
+    throw new Error('Deployment configuration is invalid');
+  }
+  deploymentConfig = {
+    deploymentId: String(input.deploymentId || 'default').slice(0, 80),
+    productName: String(input.productName || 'Tsunami Lab').slice(0, 80),
+    organizationName: input.organizationName ? String(input.organizationName).slice(0, 80) : null,
+    supportUrl: safeLink(input.supportUrl, deploymentConfig.supportUrl),
+    privacyUrl: safeLink(input.privacyUrl, new URL('./privacy.html', location.href).href),
+    telemetryEnabled: false,
+    dataResidency: input.dataResidency === 'client-only' ? 'client-only' : 'client-only',
+  };
+  $('[data-product-name]').textContent = deploymentConfig.productName;
+  $('[data-product-version]').textContent = `${deploymentConfig.productName} v${APP_VERSION.slice(0, 3)}`;
+  document.title = deploymentConfig.productName;
+  $('#supportLink').href = deploymentConfig.supportUrl;
+  $('#privacyLink').href = deploymentConfig.privacyUrl;
+  const organization = $('#organizationName');
+  if (deploymentConfig.organizationName) {
+    organization.textContent = `Managed by ${deploymentConfig.organizationName}`;
+    organization.classList.remove('hidden');
+  }
+  document.body.dataset.deploymentId = deploymentConfig.deploymentId;
+}
+
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyDataset(metadata, path, buffer) {
+  const record = metadata.datasets?.find(dataset => dataset.path === path);
+  if (!record || record.bytes !== buffer.byteLength || await sha256Hex(buffer) !== record.sha256) {
+    throw new Error(`Integrity verification failed for ${path}`);
+  }
 }
 
 function currentScenario() {
@@ -213,10 +266,14 @@ function exportResults() {
   const scenario = currentScenario();
   if (!scenario || !simulation?.event) return;
   const report = {
-    product: 'Tsunami Lab',
+    $schema: new URL('./schemas/report.schema.json', location.href).href,
+    reportFormatVersion: 1,
+    product: deploymentConfig.productName,
     version: APP_VERSION,
     exportedAt: new Date().toISOString(),
     disclaimer: 'Educational model—not an operational forecast.',
+    deployment: deploymentConfig,
+    model: modelMetadata,
     scenario,
     simulationTimeSeconds: simulation.timeSeconds,
     coastalWatch: watchState.map(({ name, lat, lon, maxCoastalM, lowCoastalM, highCoastalM, arrivalSeconds }) => ({
@@ -296,8 +353,8 @@ function renderWatchList(active = true) {
     const range = point.ensembleCount > 1
       ? `<div class="ensemble-range">range ${point.lowCoastalM.toFixed(2)}–${point.highCoastalM.toFixed(2)} m</div>`
       : '';
-    const width = Math.min(100, Math.max(1, point.maxCoastalM / 5 * 100));
-    return `<div class="watch-item ${level}"><div><div class="place">${point.name}</div><div class="arrival">${arrival}</div>${range}</div><div class="height">${value}</div><div class="bar"><i style="width:${width}%"></i></div></div>`;
+    const scaleValue = Math.min(5, Math.max(0.01, point.maxCoastalM));
+    return `<div class="watch-item ${level}"><div><div class="place">${point.name}</div><div class="arrival">${arrival}</div>${range}</div><div class="height">${value}</div><progress class="bar" max="5" value="${scaleValue}" aria-label="${point.name} wave scale"></progress></div>`;
   }).join('');
 }
 
@@ -630,14 +687,29 @@ $('#installButton').addEventListener('click', async () => {
 
 async function initialize() {
   try {
-    const [bathymetryResponse, landResponse] = await Promise.all([
-      fetch('./data/bathymetry.bin'), fetch('./data/land.geojson'),
+    const [bathymetryResponse, landResponse, configResponse, metadataResponse] = await Promise.all([
+      fetch('./data/bathymetry.bin'), fetch('./data/land.geojson'), fetch('./config.json'), fetch('./model-metadata.json'),
     ]);
-    if (!bathymetryResponse.ok || !landResponse.ok) throw new Error('Earth data could not be loaded');
-    const [bathymetryBuffer, land] = await Promise.all([bathymetryResponse.arrayBuffer(), landResponse.json()]);
+    if (![bathymetryResponse, landResponse, configResponse, metadataResponse].every(response => response.ok)) {
+      throw new Error('Required simulation assets could not be loaded');
+    }
+    const [bathymetryBuffer, landBuffer, config, metadata] = await Promise.all([
+      bathymetryResponse.arrayBuffer(), landResponse.arrayBuffer(), configResponse.json(), metadataResponse.json(),
+    ]);
+    if (metadata.modelId !== 'tsunami-lab-swe-1deg' || metadata.modelVersion !== APP_VERSION) {
+      throw new Error('Model metadata is incompatible with this application build');
+    }
+    await Promise.all([
+      verifyDataset(metadata, 'data/bathymetry.bin', bathymetryBuffer),
+      verifyDataset(metadata, 'data/land.geojson', landBuffer),
+    ]);
+    modelMetadata = metadata;
+    applyDeploymentConfig(config);
+    document.body.dataset.dataIntegrity = 'verified';
+    document.body.dataset.modelId = metadata.modelId;
     const depths = decodeBathymetry(bathymetryBuffer);
     simulation = new TsunamiSimulation(depths);
-    landGeoJson = land;
+    landGeoJson = JSON.parse(new TextDecoder().decode(landBuffer));
     simulationWorker = new Worker(new URL('./simulation-worker.js', import.meta.url), { type: 'module' });
     simulationWorker.addEventListener('message', handleWorkerMessage);
     const workerReady = new Promise((resolve, reject) => {

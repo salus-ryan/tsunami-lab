@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "deploymentId": "public-demo",
+  "productName": "Tsunami Lab",
+  "organizationName": null,
+  "supportUrl": "https://github.com/salus-ryan/tsunami-lab/issues",
+  "privacyUrl": "./privacy.html",
+  "telemetryEnabled": false,
+  "dataResidency": "client-only"
+}

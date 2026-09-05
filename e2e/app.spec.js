@@ -262,6 +262,58 @@ test('installs its service worker and reloads its complete app shell offline', a
   }
 });
 
+test('verifies dataset integrity and applies the deployment configuration', async ({ page }) => {
+  await expect(page.locator('body')).toHaveAttribute('data-data-integrity', 'verified');
+  await expect(page.locator('body')).toHaveAttribute('data-model-id', 'tsunami-lab-swe-1deg');
+  await expect(page.locator('body')).toHaveAttribute('data-deployment-id', 'public-demo');
+  await expect(page.locator('#supportLink')).toHaveAttribute('href', 'https://github.com/salus-ryan/tsunami-lab/issues');
+});
+
+test('exported reports embed deployment, model provenance, and schema references', async ({ page }) => {
+  await page.locator('#ensemble').selectOption('1');
+  await choosePreset(page, 'tohoku');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect.poll(() => page.locator('#simTime').textContent()).not.toBe('00:00');
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export results' }).click();
+  const download = await downloadPromise;
+  const report = JSON.parse(await readFile(await download.path(), 'utf8'));
+  expect(report.reportFormatVersion).toBe(1);
+  expect(report.$schema).toContain('schemas/report.schema.json');
+  expect(report.deployment.deploymentId).toBe('public-demo');
+  expect(report.deployment.telemetryEnabled).toBe(false);
+  expect(report.model.modelId).toBe('tsunami-lab-swe-1deg');
+  expect(report.model.datasets).toHaveLength(2);
+  expect(report.scenario.version).toBe(1);
+});
+
+test('serves enterprise metadata, schemas, and a health endpoint', async ({ request }) => {
+  const health = await request.get('./healthz');
+  expect(health.ok()).toBeTruthy();
+  expect((await health.text())).toContain('"status":"ok"');
+
+  const metadata = await request.get('./model-metadata.json');
+  expect(metadata.ok()).toBeTruthy();
+  expect((await metadata.json()).modelId).toBe('tsunami-lab-swe-1deg');
+
+  for (const schema of ['schemas/scenario.schema.json', 'schemas/report.schema.json']) {
+    const schemaResponse = await request.get(`./${schema}`);
+    expect(schemaResponse.ok()).toBeTruthy();
+    expect((await schemaResponse.json()).$schema).toContain('json-schema.org');
+  }
+});
+
+test('makes no network requests to third-party origins', async ({ page, baseURL }) => {
+  const external = [];
+  page.on('request', request => {
+    if (new URL(request.url()).origin !== new URL(baseURL).origin) external.push(request.url());
+  });
+  await choosePreset(page, 'tohoku');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect.poll(() => page.locator('#simTime').textContent()).not.toBe('00:00');
+  expect(external).toEqual([]);
+});
+
 test('publishes a transparent privacy notice with local-data disclosures', async ({ page }) => {
   await page.goto('./privacy.html');
   await expect(page).toHaveTitle('Privacy — Tsunami Lab');

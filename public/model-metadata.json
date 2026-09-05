@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modelId": "tsunami-lab-swe-1deg",
+  "modelVersion": "1.1.0",
+  "solver": {
+    "name": "Staggered linear shallow-water mass/momentum solver",
+    "grid": { "projection": "equirectangular", "width": 360, "height": 160, "latitudeMinimum": -80, "latitudeMaximum": 80, "nominalResolutionDegrees": 1 },
+    "features": ["adaptive CFL timestep", "harmonic face depth", "Coriolis rotation", "Manning-style bottom friction", "closed land faces", "polar damping"],
+    "maximumSimulationSeconds": 172800
+  },
+  "sourceModel": {
+    "name": "Progressive heterogeneous empirical finite fault",
+    "ruptureVelocityKmPerSecond": 2.6,
+    "ensemble": "Deterministic bounded source perturbations",
+    "elasticDislocation": false
+  },
+  "datasets": [
+    {
+      "path": "data/bathymetry.bin",
+      "sha256": "6f3a798ccdc3ec2b437d7d379002b9f89174dd9e286a38ceab527b2b96250e2d",
+      "bytes": 115200,
+      "provenance": "Downsampled Mapzen Terrarium global elevation tiles; source mosaic includes NASA SRTM and ocean bathymetry sources"
+    },
+    {
+      "path": "data/land.geojson",
+      "sha256": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+      "bytes": 138160,
+      "provenance": "Natural Earth 1:110m land polygons",
+      "license": "Public domain"
+    }
+  ],
+  "intendedUse": "Education, demonstrations, and exploratory scenario comparison",
+  "prohibitedUse": "Operational forecasting, emergency decisions, evacuation planning, site-specific inundation, damage, or casualty prediction"
+}

@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#071927">
   <meta name="description" content="Explore how undersea earthquakes generate and propagate tsunamis with a physically grounded educational model.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -14,7 +16,7 @@
   <header class="app-header">
     <div class="brand">
       <div class="logo" aria-hidden="true">≋</div>
-      <div><h1>Tsunami Lab</h1><p>Global earthquake wave sandbox</p></div>
+      <div><h1 data-product-name>Tsunami Lab</h1><p>Global earthquake wave sandbox</p><span id="organizationName" class="organization-name hidden"></span></div>
     </div>
     <div class="header-actions">
       <button id="updateButton" class="icon-button update hidden" type="button">Update</button>
@@ -127,7 +129,7 @@
     </section>
 
     <p class="disclaimer"><strong>Educational model—not a forecast.</strong> Results are coarse approximations and must never guide emergency decisions. Follow official tsunami warning centers.</p>
-    <footer><span>Tsunami Lab v1.1</span><a href="./privacy.html">Privacy</a><a href="https://github.com/salus-ryan/tsunami-lab/issues" target="_blank" rel="noreferrer">Support</a></footer>
+    <footer><span data-product-version>Tsunami Lab v1.1</span><a id="privacyLink" href="./privacy.html">Privacy</a><a id="supportLink" href="https://github.com/salus-ryan/tsunami-lab/issues" target="_blank" rel="noreferrer">Support</a></footer>
   </main>
 
   <dialog id="aboutDialog" aria-labelledby="aboutTitle">

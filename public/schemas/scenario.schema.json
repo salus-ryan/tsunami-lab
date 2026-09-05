@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salus-ryan.github.io/tsunami-lab/schemas/scenario.schema.json",
+  "title": "Tsunami Lab reproducible scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "event", "tideLevelM", "ensembleMembers", "speed"],
+  "properties": {
+    "version": { "const": 1 },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude", "magnitude", "focalDepthKm", "strikeDeg", "dipDeg", "rakeDeg", "mechanism"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -80, "maximum": 80 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+        "magnitude": { "type": "number", "minimum": 6, "maximum": 9.5 },
+        "focalDepthKm": { "type": "number", "minimum": 5, "maximum": 100 },
+        "strikeDeg": { "type": "number", "minimum": 0, "maximum": 359 },
+        "dipDeg": { "type": "number", "minimum": 5, "maximum": 80 },
+        "rakeDeg": { "type": "number", "minimum": -180, "maximum": 180 },
+        "mechanism": { "enum": ["subduction", "normal", "strike-slip"] }
+      }
+    },
+    "tideLevelM": { "type": "number", "minimum": -3, "maximum": 3 },
+    "ensembleMembers": { "enum": [1, 3, 5] },
+    "speed": { "enum": [1, 4, 12] }
+  }
+}

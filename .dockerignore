@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+playwright-report
+test-results
+tests
+e2e
+scripts
+test
+*.md
+.gitignore

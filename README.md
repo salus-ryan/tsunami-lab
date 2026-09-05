@@ -80,6 +80,10 @@ Coastal watch values apply a capped Green's-law-inspired shoaling factor to the 
 
 The app shell and datasets are cached by a service worker, so the simulator works offline after the first successful load. Production updates are offered in-app and activate only when the user accepts them.
 
+## Enterprise self-hosting
+
+A hardened container (unprivileged nginx, strict security headers, `/healthz` probe), per-deployment `config.json`, dataset integrity pinning in `model-metadata.json`, exported-report JSON Schemas, SBOM/audit/CodeQL/Dependabot supply-chain gates, and air-gap guidance are documented in [`deploy/README.md`](deploy/README.md). Vulnerability reporting is described in [`SECURITY.md`](SECURITY.md).
+
 ## Deployment
 
 The production site is deployed to GitHub Pages after unit and Playwright tests pass on `main`:
