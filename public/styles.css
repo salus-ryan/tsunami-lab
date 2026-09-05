@@ -151,7 +151,7 @@ select { border: 1px solid var(--line); background: #0c2b3e; border-radius: 8px;
 input[type="range"] { width: 100%; height: 22px; margin: 0; accent-color: var(--cyan); }
 .range-labels { display: flex; justify-content: space-between; color: #66899a; font-size: 8px; }
 .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 20px; }
-.source-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 18px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--line); }
+.source-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 18px; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--line); }
 .source-metrics div { padding: 10px; background: #0a2638; text-align: center; }
 .source-metrics span { display: block; color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .07em; }
 .source-metrics strong { display: block; margin-top: 4px; font-size: 11px; color: #dff9ff; }
@@ -200,5 +200,6 @@ dialog ul { margin: 0; padding-left: 18px; }
   .speed-label select { margin: 0; }
   button.primary, button.secondary { padding: 0 12px; }
   .control-grid { gap: 16px 12px; }
+  .source-metrics { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

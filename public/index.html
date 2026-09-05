@@ -78,6 +78,10 @@
           <div class="slider-heading"><label for="dip">Fault dip</label><output id="dipOutput">18°</output></div>
           <input id="dip" type="range" min="5" max="80" value="18" step="1">
         </div>
+        <div class="slider-row">
+          <div class="slider-heading"><label for="rake">Slip rake</label><output id="rakeOutput">90°</output></div>
+          <input id="rake" type="range" min="-180" max="180" value="90" step="1">
+        </div>
         <label class="select-control">Fault mechanism
           <select id="mechanism">
             <option value="subduction">Subduction thrust</option>
@@ -91,6 +95,7 @@
         <div><span>Rupture</span><strong>—</strong></div>
         <div><span>Mean slip</span><strong>—</strong></div>
         <div><span>Initial wave</span><strong>—</strong></div>
+        <div><span>Fault patches</span><strong>—</strong></div>
       </div>
     </section>
 
@@ -111,11 +116,11 @@
       <button class="dialog-close" aria-label="Close">×</button>
       <div class="dialog-wave">≋</div>
       <h2>About Tsunami Lab</h2>
-      <p>This sandbox solves a linear, depth-varying shallow-water wave equation on a coarse global grid. Earthquake moment, empirical rupture area, slip, dip, mechanism, and focal-depth coupling create an idealized initial sea-surface displacement.</p>
-      <h3>What is real</h3>
-      <ul><li>Global terrain-derived ocean depths</li><li>Wave speed varies approximately as √(gravity × depth)</li><li>Continents reflect and channel waves</li><li>Earthquake scaling follows standard moment relations</li></ul>
+      <p>This sandbox advances mass and momentum on a staggered, depth-varying shallow-water grid. A progressive multi-patch finite fault uses earthquake moment, rupture area, heterogeneous slip, rake, strike, dip, and focal-depth coupling to generate the wave.</p>
+      <h3>What is modeled</h3>
+      <ul><li>One-degree global terrain-derived ocean depths</li><li>Mass-conserving face transports and adaptive CFL time steps</li><li>Progressive rupture at an approximate 2.6 km/s</li><li>Depth-dependent wave speed, bottom friction, and Coriolis rotation</li></ul>
       <h3>Important limitations</h3>
-      <ul><li>Two-degree cells cannot model bays, harbors, or local inundation</li><li>The source is idealized—not a finite-fault reconstruction</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Tides, dispersion, friction, and nonlinear run-up are omitted</li></ul>
+      <ul><li>One-degree cells cannot resolve bays, harbors, or local inundation</li><li>The finite fault is empirical—not an Okada elastic-dislocation solution</li><li>Coastal values use a simple shoaling proxy, not building-level damage</li><li>Tides, dispersion, nonlinear run-up, and wetting/drying are omitted</li></ul>
       <p class="source-note">Terrain source: Mapzen Terrarium global elevation tiles (NASA SRTM and ocean bathymetry sources). Coastline: Natural Earth. Neither dataset implies endorsement.</p>
       <button class="primary dialog-done">Understood</button>
     </form>

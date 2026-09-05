@@ -29,12 +29,18 @@ npx playwright install chromium
 
 Playwright starts the app server automatically. Failure traces, screenshots, and videos are saved under `test-results/`; the HTML report is written to `playwright-report/`.
 
-The E2E suite covers initial loading, responsive canvas layout, presets, source controls, ocean/land selection, wave start/pause/resume/reset, coastal-watch updates, scientific disclosures, PWA assets, service-worker installation, and a fully offline reload. Every browser scenario runs in desktop Chromium and a Pixel 7 viewport.
+The E2E suite covers initial loading, responsive canvas layout, Web Worker startup, one-degree grid metadata, finite-fault patches, rake/mechanism coupling, presets, ocean/land selection, wave start/pause/resume/reset, high-speed responsiveness, coastal-watch updates, scientific disclosures, PWA assets, service-worker installation, and a fully offline reload. Every browser scenario runs in desktop Chromium and a Pixel 7 viewport.
+
+Run the same suite against the deployed site without starting a local server:
+
+```bash
+PLAYWRIGHT_BASE_URL=https://salus-ryan.github.io/tsunami-lab/ npm run test:e2e
+```
 
 ## Gameplay
 
 1. Tap ocean water or choose a historical-event-inspired preset.
-2. Set moment magnitude, focal depth, strike, dip, and fault mechanism.
+2. Set moment magnitude, focal depth, strike, dip, rake, and fault mechanism.
 3. Trigger the earthquake and watch crest/trough propagation.
 4. Change simulation speed, pause, or reset.
 5. Review maximum coastal-wave proxies and first-signal times at watch points.
@@ -43,13 +49,14 @@ The included presets are **inspired by** historical source regions. They are not
 
 ## Model
 
-The solver uses a 180 × 80 equirectangular grid from 80°S to 80°N. Each one-minute step advances a linear, depth-varying shallow-water wave equation:
+The solver uses a 360 × 160 one-degree equirectangular grid from 80°S to 80°N. A staggered forward-backward scheme advances linear shallow-water mass and momentum:
 
 ```text
-∂²η/∂t² = g ∇·(H ∇η)
+∂η/∂t + ∇·q = 0
+∂q/∂t + gH∇η + f k×q = friction
 ```
 
-where `η` is sea-surface displacement, `H` is local water depth, and `g` is gravity. The finite-difference solver includes spherical east-west cell scaling, reflective land boundaries, and mild numerical damping.
+where `η` is sea-surface displacement, `H` is local water depth, `q` is depth-integrated transport, `f` is the Coriolis parameter, and `g` is gravity. Face transports conserve global water volume, land faces enforce zero normal flow, harmonic face depths handle bathymetric transitions, and an adaptive CFL limit keeps each time step stable. Manning-style bottom friction and polar damping remove unresolved energy. The solver runs in a Web Worker so high-speed simulation does not block mobile controls.
 
 Earthquake moment follows:
 
@@ -57,7 +64,7 @@ Earthquake moment follows:
 M₀ = 10^(1.5 Mw + 9.1)
 ```
 
-An empirical magnitude-to-rupture-area relation estimates fault dimensions. Mean slip is derived from seismic moment and a nominal crustal rigidity. Dip, mechanism, and focal depth control vertical coupling. An idealized two-lobed finite source initializes sea-surface displacement.
+An empirical magnitude-to-rupture-area relation estimates fault dimensions. Mean slip is derived from seismic moment and nominal crustal rigidity. Dip, rake, mechanism, and focal depth control vertical coupling. The rupture is divided into tapered, heterogeneous subfault patches that activate progressively at approximately 2.6 km/s rather than displacing the entire source instantaneously.
 
 Coastal watch values apply a capped Green's-law-inspired shoaling factor to the nearest coarse offshore cell. They are hazard indicators—not predictions of local run-up, inundation, damage, or casualties.
 
@@ -78,6 +85,6 @@ The workflow in `.github/workflows/test.yml` publishes the `public/` directory. 
 
 ## Critical limitations
 
-This is **not an operational forecast**. Its two-degree cells cannot resolve bays, harbors, local topography, nonlinear inundation, tides, dispersion, bottom friction, or detailed finite-fault rupture. Do not use it for emergency planning or safety decisions. Follow official national authorities and tsunami warning centers.
+This is **not an operational forecast**. Its one-degree cells cannot resolve bays, harbors, local topography, nonlinear inundation, tides, dispersion, wetting/drying, or elastic Okada displacement. The empirical finite fault is not an event reconstruction. Do not use it for emergency planning or safety decisions. Follow official national authorities and tsunami warning centers.
 
 For research-grade modeling, replace the solver with a validated package such as NOAA MOST, GeoClaw, or COMCOT; use high-resolution bathymetry/topography; calibrate against gauges; and have domain experts validate every scenario.

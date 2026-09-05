@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function waitForEarthData(page) {
-  await page.goto('/');
+  await page.goto('./');
   await expect(page.locator('#statusText')).toHaveText('Ready—select an ocean');
   await expect(page.locator('#mapCanvas')).toBeVisible();
 }
@@ -28,6 +28,14 @@ test('loads the responsive application shell and Earth data', async ({ page }) =
   expect(canvasBox.height).toBeGreaterThan(130);
 });
 
+test('runs the upgraded one-degree model in a Web Worker', async ({ page }) => {
+  await expect(page.locator('body')).toHaveAttribute('data-simulation-backend', 'worker');
+  await expect(page.locator('#mapCanvas')).toHaveAttribute('data-grid', '360x160');
+  const stableDt = Number(await page.locator('body').getAttribute('data-stable-dt'));
+  expect(stableDt).toBeGreaterThanOrEqual(2);
+  expect(stableDt).toBeLessThanOrEqual(30);
+});
+
 test('loads an earthquake preset and derives source metrics', async ({ page }) => {
   await choosePreset(page, 'tohoku');
 
@@ -37,10 +45,22 @@ test('loads an earthquake preset and derives source metrics', async ({ page }) =
   await expect(page.locator('#mechanism')).toHaveValue('subduction');
 
   const metrics = page.locator('#sourceMetrics strong');
-  await expect(metrics).toHaveCount(3);
+  await expect(metrics).toHaveCount(4);
   await expect(metrics.nth(0)).toContainText('km');
   await expect(metrics.nth(1)).toContainText('m');
   await expect(metrics.nth(2)).toContainText('m');
+});
+
+test('builds a multi-patch source and responds physically to rake', async ({ page }) => {
+  await choosePreset(page, 'tohoku');
+  const metrics = page.locator('#sourceMetrics strong');
+  await expect(metrics.nth(3)).toHaveText(/\d+ \(\d+×\d+\)/);
+  const thrustWave = Number((await metrics.nth(2).textContent()).replace(/[^0-9.]/g, ''));
+
+  await page.locator('#rake').fill('0');
+  await expect(page.locator('#rakeOutput')).toHaveText('0°');
+  const strikeParallelWave = Number((await metrics.nth(2).textContent()).replace(/[^0-9.]/g, ''));
+  expect(strikeParallelWave).toBeLessThan(thrustWave);
 });
 
 test('runs, pauses, resumes, and resets a tsunami simulation', async ({ page }) => {
@@ -55,6 +75,8 @@ test('runs, pauses, resumes, and resets a tsunami simulation', async ({ page }) 
 
   await page.getByRole('button', { name: 'Pause' }).click();
   await expect(page.locator('#statusText')).toHaveText('Simulation paused');
+  // Allow the already-dispatched worker batch to settle, then verify no new batch starts.
+  await page.waitForTimeout(300);
   const pausedAt = await page.locator('#simTime').textContent();
   await page.waitForTimeout(300);
   await expect(page.locator('#simTime')).toHaveText(pausedAt);
@@ -73,8 +95,8 @@ test('accepts ocean taps and rejects land taps', async ({ page }) => {
   const canvas = page.locator('#mapCanvas');
   const box = await canvas.boundingBox();
 
-  // 0°E, 50°N is a land cell in the bundled terrain grid.
-  await canvas.click({ position: { x: box.width * 0.5, y: box.height * (30 / 160) } });
+  // 10°E, 50°N is an inland cell in the bundled terrain grid.
+  await canvas.click({ position: { x: box.width * (190 / 360), y: box.height * (30 / 160) } });
   await expect(page.locator('#toast')).toContainText('selected cell is on land');
   await expect(page.getByRole('button', { name: 'Trigger quake' })).toBeDisabled();
 
@@ -97,8 +119,32 @@ test('updates magnitude, fault geometry, and mechanism controls', async ({ page 
   await expect(page.locator('#depthOutput')).toHaveText('65 km');
   await expect(page.locator('#strikeOutput')).toHaveText('270°');
   await expect(page.locator('#dipOutput')).toHaveText('45°');
+  await expect(page.locator('#rakeOutput')).toHaveText('0°');
   await expect(page.locator('#mechanism')).toHaveValue('strike-slip');
   await expect(page.locator('#sourceMetrics strong').nth(0)).toContainText('km');
+});
+
+test('fault mechanisms choose physically conventional default rake', async ({ page }) => {
+  await page.locator('#mechanism').selectOption('normal');
+  await expect(page.locator('#rakeOutput')).toHaveText('-90°');
+  await page.locator('#mechanism').selectOption('strike-slip');
+  await expect(page.locator('#rakeOutput')).toHaveText('0°');
+  await page.locator('#mechanism').selectOption('subduction');
+  await expect(page.locator('#rakeOutput')).toHaveText('90°');
+});
+
+test('high-speed worker simulation keeps controls responsive', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await choosePreset(page, 'chile');
+  await page.locator('#speedSelect').selectOption('12');
+  await page.getByRole('button', { name: 'Trigger quake' }).click();
+  await expect.poll(() => page.locator('#simTime').textContent()).not.toBe('00:00');
+  await page.getByRole('button', { name: 'About the model' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Understood' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  expect(errors).toEqual([]);
 });
 
 test('explains scientific limitations in an accessible modal', async ({ page }) => {
@@ -106,8 +152,8 @@ test('explains scientific limitations in an accessible modal', async ({ page }) 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'About Tsunami Lab' })).toBeVisible();
-  await expect(dialog).toContainText('linear, depth-varying shallow-water wave equation');
-  await expect(dialog).toContainText('not a finite-fault reconstruction');
+  await expect(dialog).toContainText('mass and momentum on a staggered');
+  await expect(dialog).toContainText('not an Okada elastic-dislocation solution');
   await dialog.getByRole('button', { name: 'Understood' }).click();
   await expect(dialog).toBeHidden();
 });
@@ -142,17 +188,17 @@ test('installs its service worker and reloads its complete app shell offline', a
 });
 
 test('serves the PWA manifest and simulation datasets', async ({ request }) => {
-  const manifestResponse = await request.get('/manifest.webmanifest');
+  const manifestResponse = await request.get('./manifest.webmanifest');
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
   expect(manifest.name).toContain('Tsunami Lab');
   expect(manifest.display).toBe('standalone');
 
-  const bathymetry = await request.get('/data/bathymetry.bin');
+  const bathymetry = await request.get('./data/bathymetry.bin');
   expect(bathymetry.ok()).toBeTruthy();
-  expect((await bathymetry.body()).byteLength).toBe(180 * 80 * 2);
+  expect((await bathymetry.body()).byteLength).toBe(360 * 160 * 2);
 
-  const coastline = await request.get('/data/land.geojson');
+  const coastline = await request.get('./data/land.geojson');
   expect(coastline.ok()).toBeTruthy();
   expect((await coastline.json()).type).toBe('FeatureCollection');
 });

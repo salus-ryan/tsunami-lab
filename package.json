@@ -12,7 +12,7 @@
     "test:e2e:mobile": "playwright test --project=mobile-chromium",
     "test:e2e:headed": "playwright test --headed --project=desktop-chromium",
     "test:all": "npm test && npm run test:e2e",
-    "check": "node --check public/app.js && node --check public/simulation.js && node --check server.js && node --check playwright.config.js && node --check e2e/app.spec.js",
+    "check": "node --check public/app.js && node --check public/simulation.js && node --check public/simulation-worker.js && node --check server.js && node --check playwright.config.js && node --check e2e/app.spec.js",
     "data:build": "node scripts/generate-bathymetry.cjs"
   },
   "keywords": [

@@ -1,30 +1,32 @@
 import {
   GRID_WIDTH, GRID_HEIGHT, LAT_MIN, LAT_MAX, LAND,
-  TsunamiSimulation, decodeBathymetry, deriveEarthquake, formatSimTime, wrapLongitude,
+  TsunamiSimulation, decodeBathymetry, deriveEarthquake, defaultRakeForMechanism,
+  formatSimTime, wrapLongitude,
 } from './simulation.js';
 
-const $ = (selector) => document.querySelector(selector);
+const $ = selector => document.querySelector(selector);
 const canvas = $('#mapCanvas');
 const ctx = canvas.getContext('2d');
 const waveCanvas = document.createElement('canvas');
 waveCanvas.width = GRID_WIDTH;
 waveCanvas.height = GRID_HEIGHT;
 const waveCtx = waveCanvas.getContext('2d');
-let waveImage = waveCtx.createImageData(GRID_WIDTH, GRID_HEIGHT);
+const waveImage = waveCtx.createImageData(GRID_WIDTH, GRID_HEIGHT);
 
 const controls = {
-  magnitude: $('#magnitude'), depth: $('#depth'), strike: $('#strike'), dip: $('#dip'),
+  magnitude: $('#magnitude'), depth: $('#depth'), strike: $('#strike'), dip: $('#dip'), rake: $('#rake'),
   mechanism: $('#mechanism'), preset: $('#presetSelect'), speed: $('#speedSelect'),
 };
 const outputs = {
-  magnitude: $('#magnitudeOutput'), depth: $('#depthOutput'), strike: $('#strikeOutput'), dip: $('#dipOutput'),
+  magnitude: $('#magnitudeOutput'), depth: $('#depthOutput'), strike: $('#strikeOutput'),
+  dip: $('#dipOutput'), rake: $('#rakeOutput'),
 };
 
 const PRESETS = {
-  tohoku: { latitude: 38.3, longitude: 143.1, magnitude: 9.1, focalDepthKm: 29, strikeDeg: 193, dipDeg: 14, mechanism: 'subduction' },
-  chile: { latitude: -39.5, longitude: -74.5, magnitude: 9.5, focalDepthKm: 33, strikeDeg: 8, dipDeg: 18, mechanism: 'subduction' },
-  sumatra: { latitude: 3.3, longitude: 95.9, magnitude: 9.2, focalDepthKm: 25, strikeDeg: 330, dipDeg: 12, mechanism: 'subduction' },
-  aleutian: { latitude: 51.1, longitude: -173.2, magnitude: 8.8, focalDepthKm: 24, strikeDeg: 255, dipDeg: 16, mechanism: 'subduction' },
+  tohoku: { latitude: 38.3, longitude: 143.1, magnitude: 9.1, focalDepthKm: 29, strikeDeg: 193, dipDeg: 14, rakeDeg: 90, mechanism: 'subduction' },
+  chile: { latitude: -39.5, longitude: -74.5, magnitude: 9.5, focalDepthKm: 33, strikeDeg: 8, dipDeg: 18, rakeDeg: 90, mechanism: 'subduction' },
+  sumatra: { latitude: 3.3, longitude: 95.9, magnitude: 9.2, focalDepthKm: 25, strikeDeg: 330, dipDeg: 12, rakeDeg: 90, mechanism: 'subduction' },
+  aleutian: { latitude: 51.1, longitude: -173.2, magnitude: 8.8, focalDepthKm: 24, strikeDeg: 255, dipDeg: 16, rakeDeg: 90, mechanism: 'subduction' },
 };
 
 const WATCH_POINTS = [
@@ -41,10 +43,14 @@ const WATCH_POINTS = [
 ];
 
 let simulation;
+let simulationWorker;
+let workerReadyResolve;
 let landGeoJson;
 let selected = null;
 let running = false;
 let ready = false;
+let workerBusy = false;
+let runId = 0;
 let lastTick = 0;
 let lastWatchUpdate = 0;
 let toastTimer;
@@ -59,8 +65,19 @@ function currentEvent() {
     focalDepthKm: Number(controls.depth.value),
     strikeDeg: Number(controls.strike.value),
     dipDeg: Number(controls.dip.value),
+    rakeDeg: Number(controls.rake.value),
     mechanism: controls.mechanism.value,
   };
+}
+
+function updateSourceMetrics(derived, initialWave = null) {
+  const metrics = $('#sourceMetrics').children;
+  metrics[0].querySelector('strong').textContent = `${Math.round(derived.lengthKm)} × ${Math.round(derived.widthKm)} km`;
+  metrics[1].querySelector('strong').textContent = `${derived.slipM.toFixed(1)} m`;
+  metrics[2].querySelector('strong').textContent = selected
+    ? `${initialWave == null ? '≈ ' : ''}${(initialWave ?? derived.verticalDisplacementM).toFixed(2)} m`
+    : 'select ocean';
+  metrics[3].querySelector('strong').textContent = `${derived.patchCount} (${derived.alongPatches}×${derived.acrossPatches})`;
 }
 
 function syncOutputs() {
@@ -68,11 +85,8 @@ function syncOutputs() {
   outputs.depth.value = `${controls.depth.value} km`;
   outputs.strike.value = `${controls.strike.value}°`;
   outputs.dip.value = `${controls.dip.value}°`;
-  const derived = deriveEarthquake(currentEvent());
-  const metrics = $('#sourceMetrics').children;
-  metrics[0].querySelector('strong').textContent = `${Math.round(derived.lengthKm)} × ${Math.round(derived.widthKm)} km`;
-  metrics[1].querySelector('strong').textContent = `${derived.slipM.toFixed(1)} m`;
-  metrics[2].querySelector('strong').textContent = selected ? `≈ ${derived.verticalDisplacementM.toFixed(2)} m` : 'select ocean';
+  outputs.rake.value = `${controls.rake.value}°`;
+  updateSourceMetrics(deriveEarthquake(currentEvent()));
 }
 
 function setStatus(text, mode = 'ready') {
@@ -115,17 +129,60 @@ function renderWatchList(active = true) {
   }).join('');
 }
 
-function updateWatchPoints() {
-  if (!simulation.event) return;
-  for (const point of watchState) {
-    const sample = simulation.sampleMaximum(point.lon, point.lat);
-    if (!sample.cell) continue;
-    // Green's-law-inspired shoaling proxy to a nominal 20 m nearshore depth.
+function updateWatchPoints(samples, timeSeconds) {
+  for (let index = 0; index < watchState.length; index++) {
+    const point = watchState[index];
+    const sample = samples[index];
+    if (!sample?.cell) continue;
     const shoaling = Math.min(4.2, Math.max(1.15, (Math.max(20, sample.depthM) / 20) ** 0.25));
     point.maxCoastalM = Math.max(point.maxCoastalM, sample.maxM * shoaling);
-    if (point.arrivalSeconds == null && point.maxCoastalM >= 0.05) point.arrivalSeconds = simulation.timeSeconds;
+    if (point.arrivalSeconds == null && point.maxCoastalM >= 0.05) point.arrivalSeconds = timeSeconds;
   }
   renderWatchList(true);
+}
+
+function handleWorkerMessage(event) {
+  const message = event.data;
+  if (message.type === 'ready') {
+    workerBusy = false;
+    document.body.dataset.simulationBackend = 'worker';
+    document.body.dataset.stableDt = message.stableDtSeconds.toFixed(2);
+    workerReadyResolve?.();
+    return;
+  }
+  if (message.type === 'error') {
+    if (message.runId !== runId) return;
+    workerBusy = false;
+    running = false;
+    setStatus('Simulation worker error');
+    showToast(message.message);
+    console.error(message.stack || message.message);
+    return;
+  }
+  if (message.runId !== runId) return;
+  if (message.type === 'triggered') {
+    simulation.sourceAmplitudeM = message.sourceAmplitudeM;
+    updateSourceMetrics(message.derived, message.sourceAmplitudeM);
+    return;
+  }
+  if (message.type === 'frame') {
+    workerBusy = false;
+    simulation.current = new Float32Array(message.fieldBuffer);
+    simulation.timeSeconds = message.timeSeconds;
+    simulation.sourceAmplitudeM = message.sourceAmplitudeM;
+    $('#simTime').textContent = formatSimTime(message.timeSeconds);
+    if (message.timeSeconds - lastWatchUpdate >= 600) {
+      updateWatchPoints(message.samples, message.timeSeconds);
+      lastWatchUpdate = message.timeSeconds;
+    }
+    if (message.timeSeconds >= 172800) {
+      running = false;
+      setStatus('48-hour simulation complete');
+      $('#pauseButton').textContent = 'Resume';
+    }
+    updateWaveTexture();
+    renderMap();
+  }
 }
 
 function resizeCanvas() {
@@ -237,14 +294,25 @@ function renderMap() {
   }
 }
 
+function resetWorkerState() {
+  runId++;
+  workerBusy = false;
+  simulationWorker?.postMessage({ type: 'reset', runId });
+}
+
 function selectEpicenter(longitude, latitude, fromPreset = false) {
   if (!ready) return;
   longitude = wrapLongitude(longitude);
-  if (!simulation.isOcean(longitude, latitude)) {
+  const selectedCell = simulation.cellFor(longitude, latitude);
+  const selectedDepth = simulation.depths[selectedCell.index];
+  canvas.dataset.selectedCell = `${selectedCell.col},${selectedCell.row},${selectedCell.index}`;
+  canvas.dataset.selectedDepth = selectedDepth === LAND ? 'land' : String(selectedDepth);
+  if (selectedDepth === LAND) {
     showToast('Choose ocean water—the selected cell is on land.');
     return;
   }
   running = false;
+  resetWorkerState();
   simulation.clear();
   selected = { longitude, latitude };
   if (!fromPreset) controls.preset.value = 'custom';
@@ -268,6 +336,7 @@ function applyPreset(name) {
   controls.depth.value = preset.focalDepthKm;
   controls.strike.value = preset.strikeDeg;
   controls.dip.value = preset.dipDeg;
+  controls.rake.value = preset.rakeDeg;
   controls.mechanism.value = preset.mechanism;
   selectEpicenter(preset.longitude, preset.latitude, true);
   syncOutputs();
@@ -275,29 +344,30 @@ function applyPreset(name) {
 
 function triggerQuake() {
   if (!selected || !ready) return;
-  try {
-    const derived = simulation.trigger(currentEvent());
-    resetWatchState();
-    running = true;
-    lastTick = performance.now();
-    lastWatchUpdate = 0;
-    $('#pauseButton').disabled = false;
-    $('#pauseButton').textContent = 'Pause';
-    $('#startButton span').textContent = 'Restart quake';
-    setStatus(`M${Number(controls.magnitude.value).toFixed(1)} wave propagating`, 'running');
-    const metrics = $('#sourceMetrics').children;
-    metrics[0].querySelector('strong').textContent = `${Math.round(derived.lengthKm)} × ${Math.round(derived.widthKm)} km`;
-    metrics[1].querySelector('strong').textContent = `${derived.slipM.toFixed(1)} m`;
-    metrics[2].querySelector('strong').textContent = `${simulation.sourceAmplitudeM.toFixed(2)} m`;
-    updateWaveTexture();
-    renderMap();
-  } catch (error) {
-    showToast(error.message);
-  }
+  const event = currentEvent();
+  const derived = deriveEarthquake(event);
+  runId++;
+  simulation.clear();
+  simulation.event = { ...event, derived };
+  simulation.sourceAmplitudeM = derived.verticalDisplacementM;
+  resetWatchState();
+  running = true;
+  workerBusy = false;
+  lastTick = performance.now();
+  lastWatchUpdate = 0;
+  simulationWorker.postMessage({ type: 'trigger', runId, event });
+  $('#pauseButton').disabled = false;
+  $('#pauseButton').textContent = 'Pause';
+  $('#startButton span').textContent = 'Restart quake';
+  setStatus(`M${event.magnitude.toFixed(1)} wave propagating`, 'running');
+  updateSourceMetrics(derived, derived.verticalDisplacementM);
+  updateWaveTexture();
+  renderMap();
 }
 
 function resetSimulation() {
   running = false;
+  resetWorkerState();
   simulation?.clear();
   $('#simTime').textContent = '00:00';
   $('#pauseButton').disabled = true;
@@ -311,23 +381,13 @@ function resetSimulation() {
 }
 
 function animationLoop(now) {
-  if (running && now - lastTick >= 80) {
-    const steps = Number(controls.speed.value);
-    for (let i = 0; i < steps; i++) simulation.step();
+  if (running && !workerBusy && now - lastTick >= 80) {
+    workerBusy = true;
+    const steps = Number(controls.speed.value) * 3;
+    simulationWorker.postMessage({ type: 'advance', runId, steps });
     lastTick = now;
-    $('#simTime').textContent = formatSimTime(simulation.timeSeconds);
-    if (simulation.timeSeconds - lastWatchUpdate >= 600) {
-      updateWatchPoints();
-      lastWatchUpdate = simulation.timeSeconds;
-    }
-    if (simulation.timeSeconds >= 172800) {
-      running = false;
-      setStatus('48-hour simulation complete');
-      $('#pauseButton').textContent = 'Resume';
-    }
-    updateWaveTexture();
-    renderMap();
-  } else if (running) renderMap();
+  }
+  if (running) renderMap();
   requestAnimationFrame(animationLoop);
 }
 
@@ -339,9 +399,13 @@ canvas.addEventListener('pointerup', event => {
 });
 
 for (const [name, control] of Object.entries(controls)) {
-  if (name === 'preset' || name === 'speed') continue;
+  if (name === 'preset' || name === 'speed' || name === 'mechanism') continue;
   control.addEventListener('input', syncOutputs);
 }
+controls.mechanism.addEventListener('change', () => {
+  controls.rake.value = defaultRakeForMechanism(controls.mechanism.value);
+  syncOutputs();
+});
 controls.preset.addEventListener('change', () => applyPreset(controls.preset.value));
 $('#startButton').addEventListener('click', triggerQuake);
 $('#resetButton').addEventListener('click', resetSimulation);
@@ -374,9 +438,23 @@ async function initialize() {
     ]);
     if (!bathymetryResponse.ok || !landResponse.ok) throw new Error('Earth data could not be loaded');
     const [bathymetryBuffer, land] = await Promise.all([bathymetryResponse.arrayBuffer(), landResponse.json()]);
-    simulation = new TsunamiSimulation(decodeBathymetry(bathymetryBuffer));
+    const depths = decodeBathymetry(bathymetryBuffer);
+    simulation = new TsunamiSimulation(depths);
     landGeoJson = land;
+    simulationWorker = new Worker(new URL('./simulation-worker.js', import.meta.url), { type: 'module' });
+    simulationWorker.addEventListener('message', handleWorkerMessage);
+    const workerReady = new Promise((resolve, reject) => {
+      workerReadyResolve = resolve;
+      setTimeout(() => reject(new Error('Simulation worker startup timed out')), 8000);
+    });
+    const workerDepths = depths.slice();
+    simulationWorker.postMessage({
+      type: 'init', width: GRID_WIDTH, height: GRID_HEIGHT,
+      depthBuffer: workerDepths.buffer, watchPoints: WATCH_POINTS,
+    }, [workerDepths.buffer]);
+    await workerReady;
     ready = true;
+    canvas.dataset.grid = `${GRID_WIDTH}x${GRID_HEIGHT}`;
     setStatus('Ready—select an ocean');
     $('#statusLight').className = 'ready';
     updateWaveTexture();
@@ -385,7 +463,7 @@ async function initialize() {
     requestAnimationFrame(animationLoop);
   } catch (error) {
     console.error(error);
-    setStatus('Failed to load Earth data');
+    setStatus('Failed to load simulation engine');
     showToast('Could not load simulation data. Reload the app.');
   }
 }

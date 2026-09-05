@@ -1,4 +1,4 @@
-/* Rebuild the bundled low-resolution grid from public Mapzen Terrarium z1 tiles. */
+/* Rebuild the bundled one-degree grid from public Mapzen Terrarium tiles. */
 const fs = require('node:fs');
 const path = require('node:path');
 const { PNG } = require('pngjs');
@@ -6,21 +6,23 @@ const { PNG } = require('pngjs');
 const root = path.resolve(__dirname, '..');
 const tileDir = path.join(root, 'tmp-tiles');
 const output = path.join(root, 'public/data/bathymetry.bin');
-const width = 180;
-const height = 80;
+const zoom = 2;
+const tileCount = 2 ** zoom;
+const width = 360;
+const height = 160;
 const latMin = -80;
 const latMax = 80;
-const worldSize = 512;
+const worldSize = tileCount * 256;
 
 async function main() {
   fs.mkdirSync(tileDir, { recursive: true });
   const tiles = new Map();
-  for (let y = 0; y < 2; y++) {
-    for (let x = 0; x < 2; x++) {
+  for (let y = 0; y < tileCount; y++) {
+    for (let x = 0; x < tileCount; x++) {
       const name = `${x}-${y}`;
       const file = path.join(tileDir, `${name}.png`);
       if (!fs.existsSync(file)) {
-        const response = await fetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/1/${x}/${y}.png`);
+        const response = await fetch(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${zoom}/${x}/${y}.png`);
         if (!response.ok) throw new Error(`Tile ${name} failed: HTTP ${response.status}`);
         fs.writeFileSync(file, Buffer.from(await response.arrayBuffer()));
       }
