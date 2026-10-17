@@ -24,7 +24,7 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "pngjs": "^7.0.0"
   }
 }
